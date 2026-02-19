@@ -8,10 +8,11 @@
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.System.h>
-#include <Lmcons.h>
+#include <winrt/Windows.ApplicationModel.Resources.h>
 #include <winrt/Microsoft.UI.Interop.h>
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <Microsoft.UI.Xaml.Window.h>
+#include <Lmcons.h>
 
 #include "configuration.hpp"
 
@@ -20,6 +21,7 @@ using namespace Microsoft::UI::Xaml;
 using namespace Microsoft::UI::Xaml::Controls;
 using namespace Microsoft::UI::Xaml::Input;
 using namespace Microsoft::Web::WebView2::Core;
+using namespace Windows::ApplicationModel::Resources;
 using namespace Windows::Foundation;
 using namespace Windows::System;
 
@@ -62,6 +64,13 @@ namespace winrt::CrumbsBrowser::implementation
         Microsoft::UI::WindowId windowId = winrt::Microsoft::UI::GetWindowIdFromWindow(hwnd);
         auto appWindow = winrt::Microsoft::UI::Windowing::AppWindow::GetFromWindowId(windowId);
         appWindow.SetIcon(L"file.ico");
+
+        auto resourceLoader = ResourceLoader::GetForViewIndependentUse();
+        auto title = resourceLoader.GetString(L"MainWindow_Title");
+        if (!title.empty())
+        {
+            Title(title);
+        }
 
         if (auto root = Content().try_as<FrameworkElement>())
         {
