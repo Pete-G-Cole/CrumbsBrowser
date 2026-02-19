@@ -15,6 +15,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Configuration.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Assets">
@@ -29,5 +30,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\file.ico">
+      <Filter>Assets</Filter>
+    </Image>
   </ItemGroup>
 </Project>
