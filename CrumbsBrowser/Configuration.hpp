@@ -58,32 +58,80 @@ namespace ConfigLib {
         return out;
     }
 
+    // NOTE: We only deal with strings and boolean values - numbers must be strings
     inline void applyEnv(json& config, const std::string& envKey, const std::string& value)
     {
         auto parts = split_env_key(envKey);
+
+        auto parseValue = [&]() -> json
+            {
+                if (value == "true" || value == "false")
+                    return value == "true";
+
+                //try { return std::stod(value); }
+                //catch (...) { return value; }
+                return value;
+            };
 
         json* current = &config;
         for (size_t i = 0; i < parts.size(); ++i)
         {
             std::string p = parts[i];
-
-            // optional normalisation: capitalise first letter
-            if (!p.empty())
-                p[0] = std::toupper(p[0]);
-
-            if (i == parts.size() - 1)
+            bool isIndex = !p.empty();
+            for (char ch : p)
             {
-                // Detect numbers / bools automatically
-                if (value == "true" || value == "false")
-                    (*current)[p] = (value == "true");
-                else {
-                    try { (*current)[p] = std::stod(value); }
-                    catch (...) { (*current)[p] = value; }
+                if (ch < '0' || ch > '9')
+                {
+                    isIndex = false;
+                    break;
+                }
+            }
+
+            size_t index = 0;
+            if (isIndex)
+            {
+                index = static_cast<size_t>(std::stoul(p));
+            }
+            else if (!p.empty())
+            {
+                // optional normalisation: capitalise first letter
+                p[0] = std::toupper(p[0]);
+            }
+
+            const bool isLast = (i == parts.size() - 1);
+            if (isLast)
+            {
+                json parsed = parseValue();
+
+                if (isIndex)
+                {
+                    if (!current->is_array())
+                        *current = json::array();
+                    while (current->size() <= index)
+                        current->push_back(nullptr);
+
+                    (*current)[index] = parsed;
+                }
+                else
+                {
+                    (*current)[p] = parsed;
                 }
             }
             else
             {
-                current = &((*current)[p]);
+                if (isIndex)
+                {
+                    if (!current->is_array())
+                        *current = json::array();
+                    while (current->size() <= index)
+                        current->push_back(nullptr);
+
+                    current = &((*current)[index]);
+                }
+                else
+                {
+                    current = &((*current)[p]);
+                }
             }
         }
     }
@@ -195,17 +243,20 @@ namespace ConfigLib {
             userCfg = userDir / appName / "appsettings.json";
             merge(_config, loadJson(userCfg));
 
-            // 7. Apply environment variables (all of them)
-            for (auto& e : getAllEnvVars())
+            // 7. Apply environment variables prefixed with appName_
+            for (auto& e : getAllEnvVars(appName))
             {
                 applyEnv(_config, e.first, e.second);
             }
         }
 
-        // Enumerate environment variables
-        static std::vector<std::pair<std::string, std::string>> getAllEnvVars()
+        // Enumerate environment variables whose name starts with appName_
+        // and return them with the prefix stripped.
+        static std::vector<std::pair<std::string, std::string>> getAllEnvVars(const std::string& appName)
         {
             std::vector<std::pair<std::string, std::string>> out;
+            const std::string prefix = appName + "_";
+
             LPWCH env = GetEnvironmentStringsW();
             LPWCH cur = env;
 
@@ -219,7 +270,13 @@ namespace ConfigLib {
 
                 std::string key(ws.begin(), ws.begin() + pos);
                 std::string val(ws.begin() + pos + 1, ws.end());
-                out.emplace_back(key, val);
+
+                if (key.size() > prefix.size() &&
+                    _strnicmp(key.c_str(), prefix.c_str(), prefix.size()) == 0)
+                {
+                    key = key.substr(prefix.size());
+                    out.emplace_back(key, val);
+                }
             }
 
             FreeEnvironmentStringsW(env);

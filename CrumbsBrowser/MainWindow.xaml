@@ -22,7 +22,7 @@
         <TextBox x:Name="addressBar" Grid.Column="0" Grid.Row="0" VerticalAlignment="Center" KeyDown="AddressBar_KeyDown"/>
         <Button x:Name="goButton" Grid.Column="1" Grid.Row="0" Content="Go" Click="GoButton_Click"/>
         <WebView2 x:Name="WebBrowser"  Grid.Row="1" Grid.ColumnSpan="2"
-        Source="https://www.meadroid.com" HorizontalAlignment="Stretch" 
+        Source="about:blank" HorizontalAlignment="Stretch" 
         VerticalAlignment="Stretch" NavigationStarting="EnsureHttps"/>
     </Grid>
 </Window>

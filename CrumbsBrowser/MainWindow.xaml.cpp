@@ -92,19 +92,23 @@ namespace winrt::CrumbsBrowser::implementation
     {
         co_await WebBrowser().EnsureCoreWebView2Async();
 
-        if (auto startUrl = ResolveStartupUrl())
+        try
         {
-            startUrl = ReplaceTokensInString(*startUrl);
-            try
+            if (auto startUrl = ResolveStartupUrl())
             {
+                startUrl = ReplaceTokensInString(*startUrl);
                 Uri uri{ *startUrl };
                 WebBrowser().Source(uri);
                 addressBar().Text(uri.AbsoluteUri());
             }
-            catch (hresult_error const&)
-            {
-                // Ignore invalid configured URI and fall back to default.
-            }
+        }
+        catch (hresult_error const&)
+        {
+            // Ignore invalid configured URI and fall back to default.
+        }
+        catch (std::exception const&)
+        {
+            // Prevent unhandled std::exceptions from terminating the app.
         }
     }
 
@@ -211,10 +215,24 @@ namespace winrt::CrumbsBrowser::implementation
 
         RequireHttps = config.getBool("Security/RequireHttps", false);
 
-        auto sUrl = config.getString("StartupUrl", "");
-        if (!sUrl.empty()) {
-            return hstring{ utf8_to_utf16(sUrl) };
-        }
+		auto sUrl = config.getString("Startup/Url", "");
+		if (!sUrl.empty()) {
+			auto arguments = config.getArray("Startup/Arguments");
+			bool first = true;
+			for (auto& arg : arguments)
+			{
+				auto name  = arg.value("Name",  "");
+                auto value = arg.value("Value", "");
+				if (!name.empty())
+				{
+					sUrl += first ? "?" : "&";
+					sUrl += name + "=" + value;
+					first = false;
+				}
+			}
+
+			return hstring{ utf8_to_utf16(sUrl) };
+		}
 
         return std::nullopt;
     }
