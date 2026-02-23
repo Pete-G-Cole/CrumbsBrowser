@@ -152,6 +152,9 @@
     </Text>
   </ItemGroup>
   <ItemGroup>
+    <None Include="appsettings.json">
+      <DeploymentContent>true</DeploymentContent>
+    </None>
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
