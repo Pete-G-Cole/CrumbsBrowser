@@ -9,15 +9,15 @@
   IgnorableNamespaces="uap rescap systemai">
 
   <Identity
-    Name="e4459ef2-0acb-4419-a1eb-4a7892cf4912"
-    Publisher="CN=Me"
+    Name="CrumbsBrowser"
+    Publisher="CN=Pete Cole"
     Version="1.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="e4459ef2-0acb-4419-a1eb-4a7892cf4912" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>CrumbsBrowser (Package)</DisplayName>
-    <PublisherDisplayName>Me</PublisherDisplayName>
+    <PublisherDisplayName>Pete Cole</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
 
