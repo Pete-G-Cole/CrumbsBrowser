@@ -158,6 +158,7 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="Assets\crumbs.ico" />
     <Image Include="Assets\file.ico" />
   </ItemGroup>
   <ItemGroup>

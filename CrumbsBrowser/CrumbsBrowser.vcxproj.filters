@@ -36,12 +36,11 @@
     <Image Include="Assets\file.ico">
       <Filter>Assets</Filter>
     </Image>
+    <Image Include="Assets\crumbs.ico">
+      <Filter>Assets</Filter>
+    </Image>
   </ItemGroup>
   <ItemGroup>
     <PRIResource Include="Strings\en-US\Resources.resw" />
-  </ItemGroup>
-  <ItemGroup>
-    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
-    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
   </ItemGroup>
 </Project>
