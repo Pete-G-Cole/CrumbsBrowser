@@ -121,6 +121,11 @@ namespace winrt::CrumbsBrowser::implementation
             return;
         }
 
+        if (std::wstring_view(text).find(L"://") == std::wstring_view::npos)
+        {
+            text = L"https://" + text;
+        }
+
         try
         {
             Uri uri{ text };
@@ -128,6 +133,7 @@ namespace winrt::CrumbsBrowser::implementation
             if (webview)
             {
                 webview.Source(uri);
+				addressBar().Text(uri.AbsoluteUri());
             }
         }
         catch (hresult_error const&)

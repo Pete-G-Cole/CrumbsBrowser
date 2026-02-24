@@ -95,7 +95,7 @@ namespace ConfigLib {
             else if (!p.empty())
             {
                 // optional normalisation: capitalise first letter
-                p[0] = std::toupper(p[0]);
+                p[0] = static_cast<char>(std::toupper(static_cast<unsigned char>(p[0])));
             }
 
             const bool isLast = (i == parts.size() - 1);
@@ -255,9 +255,21 @@ namespace ConfigLib {
         static std::vector<std::pair<std::string, std::string>> getAllEnvVars(const std::string& appName)
         {
             std::vector<std::pair<std::string, std::string>> out;
-            const std::string prefix = appName + "_";
+            const std::wstring wPrefix(appName.begin(), appName.end());  // appName is ASCII
+            const std::wstring wPrefixDelim = wPrefix + L'_';
+
+            auto toUtf8 = [](const std::wstring& w) -> std::string
+            {
+                if (w.empty()) return {};
+                int len = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+                if (len <= 1) return {};
+                std::string s(len - 1, '\0');
+                WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, s.data(), len, nullptr, nullptr);
+                return s;
+            };
 
             LPWCH env = GetEnvironmentStringsW();
+            if (!env) return out;
             LPWCH cur = env;
 
             while (*cur)
@@ -268,14 +280,13 @@ namespace ConfigLib {
                 auto pos = ws.find(L'=');
                 if (pos == std::wstring::npos) continue;
 
-                std::string key(ws.begin(), ws.begin() + pos);
-                std::string val(ws.begin() + pos + 1, ws.end());
+                std::wstring wKey = ws.substr(0, pos);
+                std::wstring wVal = ws.substr(pos + 1);
 
-                if (key.size() > prefix.size() &&
-                    _strnicmp(key.c_str(), prefix.c_str(), prefix.size()) == 0)
+                if (wKey.size() > wPrefixDelim.size() &&
+                    _wcsnicmp(wKey.c_str(), wPrefixDelim.c_str(), wPrefixDelim.size()) == 0)
                 {
-                    key = key.substr(prefix.size());
-                    out.emplace_back(key, val);
+                    out.emplace_back(toUtf8(wKey.substr(wPrefixDelim.size())), toUtf8(wVal));
                 }
             }
 
