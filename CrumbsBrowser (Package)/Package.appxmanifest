@@ -16,7 +16,7 @@
   <mp:PhoneIdentity PhoneProductId="e4459ef2-0acb-4419-a1eb-4a7892cf4912" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>CrumbsBrowser (Package)</DisplayName>
+    <DisplayName>CrumbsBrowser</DisplayName>
     <PublisherDisplayName>Pete Cole</PublisherDisplayName>
     <Logo>Images\StoreLogo.png</Logo>
   </Properties>
@@ -35,7 +35,7 @@
       Executable="$targetnametoken$.exe"
       EntryPoint="$targetentrypoint$">
       <uap:VisualElements
-        DisplayName="CrumbsBrowser (Package)"
+        DisplayName="CrumbsBrowser"
         Description="CrumbsBrowser (Package)"
         BackgroundColor="transparent"
         Square150x150Logo="Images\Square150x150Logo.png"
