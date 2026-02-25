@@ -111,43 +111,38 @@ namespace winrt::CrumbsBrowser::implementation
             // Prevent unhandled std::exceptions from terminating the app.
         }
     }
-
-    void MainWindow::GoButton_Click(IInspectable const&, RoutedEventArgs const&)
-    {
-        auto text = addressBar().Text();
-
-        if (text.empty())
-        {
-            return;
-        }
-
-        if (std::wstring_view(text).find(L"://") == std::wstring_view::npos)
-        {
-            text = L"https://" + text;
-        }
-
-        try
-        {
-            Uri uri{ text };
-            auto webview = WebBrowser();
-            if (webview)
-            {
-                webview.Source(uri);
-				addressBar().Text(uri.AbsoluteUri());
-            }
-        }
-        catch (hresult_error const&)
-        {
-            // Invalid URI; ignore navigation
-        }
-    }
-
+  
     void MainWindow::AddressBar_KeyDown(IInspectable const&,KeyRoutedEventArgs const& args)
     {
         if (args.Key() == VirtualKey::Enter)
         {
             args.Handled(true);
-            GoButton_Click(nullptr, RoutedEventArgs{});
+            auto text = addressBar().Text();
+
+            if (text.empty())
+            {
+                return;
+            }
+
+            if (std::wstring_view(text).find(L"://") == std::wstring_view::npos)
+            {
+                text = L"https://" + text;
+            }
+
+            try
+            {
+                Uri uri{ text };
+                auto webview = WebBrowser();
+                if (webview)
+                {
+                    webview.Source(uri);
+                    addressBar().Text(uri.AbsoluteUri());
+                }
+            }
+            catch (hresult_error const&)
+            {
+                // Invalid URI; ignore navigation
+            }
         }
     }
 
