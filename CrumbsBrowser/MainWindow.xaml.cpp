@@ -6,6 +6,8 @@
 #include <winrt/Microsoft.Web.WebView2.Core.h>
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
+#include <winrt/Microsoft.UI.Xaml.Media.h>
+#include <winrt/Windows.UI.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.ApplicationModel.Resources.h>
@@ -24,6 +26,7 @@ using namespace Microsoft::Web::WebView2::Core;
 using namespace Windows::ApplicationModel::Resources;
 using namespace Windows::Foundation;
 using namespace Windows::System;
+using namespace Microsoft::UI::Xaml::Media; // <-- Added this line
 
 
 // UTF-8 to UTF-16
@@ -236,5 +239,15 @@ namespace winrt::CrumbsBrowser::implementation
 		}
 
         return std::nullopt;
+    }
+
+    void MainWindow::AddressBar_GotFocus(IInspectable const&, RoutedEventArgs const&)
+    {
+        addressBarBorder().BorderBrush(SolidColorBrush({ 255, 0, 120, 212 }));
+    }
+
+    void MainWindow::AddressBar_LostFocus(IInspectable const&, RoutedEventArgs const&)
+    {
+        addressBarBorder().BorderBrush(SolidColorBrush({ 255, 153, 153, 153 }));
     }
 }
