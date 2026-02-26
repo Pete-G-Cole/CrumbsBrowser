@@ -7,6 +7,8 @@
 #include <winrt/Microsoft.UI.Xaml.Controls.h>
 #include <winrt/Microsoft.UI.Xaml.Input.h>
 #include <winrt/Microsoft.UI.Xaml.Media.h>
+#include <winrt/Microsoft.UI.Xaml.Media.Imaging.h>
+#include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.UI.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.System.h>
@@ -26,7 +28,8 @@ using namespace Microsoft::Web::WebView2::Core;
 using namespace Windows::ApplicationModel::Resources;
 using namespace Windows::Foundation;
 using namespace Windows::System;
-using namespace Microsoft::UI::Xaml::Media; // <-- Added this line
+using namespace Microsoft::UI::Xaml::Media;
+using namespace Microsoft::UI::Xaml::Media::Imaging;
 
 
 // UTF-8 to UTF-16
@@ -103,6 +106,23 @@ namespace winrt::CrumbsBrowser::implementation
         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
         co_await WebBrowser().EnsureCoreWebView2Async();
+
+        WebBrowser().CoreWebView2().FaviconChanged(
+            [this](CoreWebView2 const& sender, IInspectable const&) -> winrt::fire_and_forget
+            {
+                auto stream = co_await sender.GetFaviconAsync(CoreWebView2FaviconImageFormat::Png);
+                if (stream)
+                {
+                    BitmapImage bitmap{};
+                    co_await bitmap.SetSourceAsync(stream);
+                    titleBarIcon().Source(bitmap);
+                    titleBarIcon().Visibility(Visibility::Visible);
+                }
+                else
+                {
+                    titleBarIcon().Visibility(Visibility::Collapsed);
+                }
+            });
 
         WebBrowser().CoreWebView2().DocumentTitleChanged(
             [this](CoreWebView2 const& sender, IInspectable const&)
