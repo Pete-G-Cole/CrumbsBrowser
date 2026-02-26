@@ -40,7 +40,12 @@
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Spacing="6">
-                <Image x:Name="titleBarIcon" Width="16" Height="16" Visibility="Collapsed"/>
+                <Grid Width="16" Height="16">
+                    <Image x:Name="titleBarIcon" Visibility="Collapsed"/>
+                    <ProgressRing x:Name="titleBarProgressRing"
+                                  Width="16" Height="16"
+                                  IsActive="False" Visibility="Collapsed"/>
+                </Grid>
                 <TextBlock x:Name="titleBarText"
                            VerticalAlignment="Center"
                            Style="{StaticResource CaptionTextBlockStyle}"/>

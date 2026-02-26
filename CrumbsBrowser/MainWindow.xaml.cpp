@@ -107,19 +107,47 @@ namespace winrt::CrumbsBrowser::implementation
     {
         co_await WebBrowser().EnsureCoreWebView2Async();
 
+        WebBrowser().CoreWebView2().NavigationStarting(
+            [this](CoreWebView2 const&, CoreWebView2NavigationStartingEventArgs const&)
+            {
+                titleBarIcon().Visibility(Visibility::Collapsed);
+                titleBarProgressRing().IsActive(true);
+                titleBarProgressRing().Visibility(Visibility::Visible);
+            });
+
+        WebBrowser().CoreWebView2().NavigationCompleted(
+            [this](CoreWebView2 const&, CoreWebView2NavigationCompletedEventArgs const&)
+            {
+                titleBarProgressRing().IsActive(false);
+                titleBarProgressRing().Visibility(Visibility::Collapsed);
+                if (titleBarIcon().Source() && titleBarIcon().Visibility() == Visibility::Collapsed)
+                {
+                    titleBarIcon().Visibility(Visibility::Visible);
+                }
+            });
+
         WebBrowser().CoreWebView2().FaviconChanged(
             [this](CoreWebView2 const& sender, IInspectable const&) -> winrt::fire_and_forget
             {
                 auto stream = co_await sender.GetFaviconAsync(CoreWebView2FaviconImageFormat::Png);
                 if (stream)
                 {
-                    BitmapImage bitmap{};
-                    co_await bitmap.SetSourceAsync(stream);
-                    titleBarIcon().Source(bitmap);
-                    titleBarIcon().Visibility(Visibility::Visible);
+                    try
+                    {
+                        BitmapImage bitmap{};
+                        co_await bitmap.SetSourceAsync(stream);
+                        titleBarIcon().Source(bitmap);
+                        titleBarIcon().Visibility(Visibility::Visible);
+                    }
+                    catch (hresult_error const&)
+                    {
+                        titleBarIcon().Source(nullptr);
+                        titleBarIcon().Visibility(Visibility::Collapsed);
+                    }
                 }
                 else
                 {
+                    titleBarIcon().Source(nullptr);
                     titleBarIcon().Visibility(Visibility::Collapsed);
                 }
             });
