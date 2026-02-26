@@ -11,6 +11,7 @@
 
     <Grid>
         <Grid.RowDefinitions>
+            <RowDefinition Height="32"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
@@ -19,8 +20,16 @@
             <ColumnDefinition Width="Auto"/>
         </Grid.ColumnDefinitions>
 
+        <Grid x:Name="titleBarGrid"
+              Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2">
+            <TextBlock x:Name="titleBarText"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       Style="{StaticResource CaptionTextBlockStyle}"/>
+        </Grid>
+
         <Border x:Name="addressBarBorder"
-                Grid.Column="0" Grid.Row="0"
+                Grid.Column="0" Grid.Row="1"
                 Height="32" Margin="8,8,8,8"
                 CornerRadius="16"
                 BorderThickness="1.5"
@@ -36,7 +45,7 @@
                      LostFocus="AddressBar_LostFocus"/>
         </Border>
 
-        <WebView2 x:Name="WebBrowser" Grid.Row="1" Grid.ColumnSpan="2"
+        <WebView2 x:Name="WebBrowser" Grid.Row="2" Grid.ColumnSpan="2"
                   Source="about:blank" HorizontalAlignment="Stretch"
                   VerticalAlignment="Stretch" NavigationStarting="EnsureHttps"/>
     </Grid>

@@ -60,19 +60,28 @@ namespace winrt::CrumbsBrowser::implementation
     {
         InitializeComponent();
 
+        ExtendsContentIntoTitleBar(true);
+        SetTitleBar(titleBarGrid());
+
         auto windowNative = this->try_as<::IWindowNative>();
         HWND hwnd{};
         windowNative->get_WindowHandle(&hwnd);
-        
+
         Microsoft::UI::WindowId windowId = winrt::Microsoft::UI::GetWindowIdFromWindow(hwnd);
         auto appWindow = winrt::Microsoft::UI::Windowing::AppWindow::GetFromWindowId(windowId);
         appWindow.SetIcon(L"file.ico");
+
+        // Make caption button backgrounds transparent so they blend with the custom title bar
+        auto titleBar = appWindow.TitleBar();
+        titleBar.ButtonBackgroundColor(winrt::Windows::UI::Color{ 0, 0, 0, 0 });
+        titleBar.ButtonInactiveBackgroundColor(winrt::Windows::UI::Color{ 0, 0, 0, 0 });
 
         auto resourceLoader = ResourceLoader::GetForViewIndependentUse();
         auto title = resourceLoader.GetString(L"MainWindow_Title");
         if (!title.empty())
         {
             Title(title);
+            titleBarText().Text(title);
         }
 
         if (auto root = Content().try_as<FrameworkElement>())
@@ -94,6 +103,13 @@ namespace winrt::CrumbsBrowser::implementation
         winrt::Microsoft::UI::Xaml::RoutedEventArgs const&)
     {
         co_await WebBrowser().EnsureCoreWebView2Async();
+
+        WebBrowser().CoreWebView2().DocumentTitleChanged(
+            [this](CoreWebView2 const& sender, IInspectable const&)
+            {
+                auto pageTitle = sender.DocumentTitle();
+                titleBarText().Text(pageTitle.empty() ? Title() : pageTitle);
+            });
 
         try
         {
