@@ -18,8 +18,6 @@
 #include <Microsoft.UI.Xaml.Window.h>
 #include <Lmcons.h>
 
-#include "configuration.hpp"
-
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
 using namespace Microsoft::UI::Xaml::Controls;
@@ -173,6 +171,12 @@ namespace winrt::CrumbsBrowser::implementation
             });
 
         refreshButton().IsEnabled(true);
+        RequireHttps = appConfiguration.getBool("Security/RequireHttps", false);
+		if ( appConfiguration.getBool("NoUI", false) )
+        {
+			// If NoUI mode is enabled, hide buttons and address bar to create a more immersive experience.
+			uiGrid().Visibility(Visibility::Collapsed);
+        }
 
         try
         {
@@ -238,32 +242,58 @@ namespace winrt::CrumbsBrowser::implementation
             }
         }
     }
+
     hstring MainWindow::ReplaceTokensInString(hstring replaceIn)
     {
-        constexpr wchar_t token[] = L"[USERNAME]";
-        constexpr size_t tokenLength = sizeof(token) / sizeof(wchar_t) - 1;
+        const std::wstring tokens[] = {
+            L"[USERNAME]",
+			L"[COMPUTERNAME]",
+            L"[OS]"
+        };
 
+        std::wstring replacements[std::size(tokens)];
+
+        // [USERNAME]: current Windows user name
         wchar_t userName[UNLEN + 1]{};
         DWORD userNameSize = static_cast<DWORD>(std::size(userName));
-        if (!GetUserNameW(userName, &userNameSize))
+        if (GetUserNameW(userName, &userNameSize))
         {
-            return replaceIn;
+            replacements[0] = userName;
+        }
+
+		// [COMPUTERNAME]: current Windows machine name
+        wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1]{};
+        DWORD computerNameSize = static_cast<DWORD>(std::size(computerName));
+        if (GetComputerNameW(computerName, &computerNameSize))
+        {
+            replacements[1] = computerName;
+        }
+
+        // [OS]: value of the OS environment variable (e.g. "Windows_NT")
+        wchar_t osEnv[256]{};
+        DWORD osLen = GetEnvironmentVariableW(L"OS", osEnv, static_cast<DWORD>(std::size(osEnv)));
+        if (osLen > 0 && osLen < static_cast<DWORD>(std::size(osEnv)))
+        {
+            replacements[2] = osEnv;
         }
 
         std::wstring output{ replaceIn.c_str(), replaceIn.size() };
-        std::wstring replacement{ userName };
-        size_t pos = 0;
 
-        while (pos + tokenLength <= output.size())
+        for (size_t t = 0; t < std::size(tokens); ++t)
         {
-            if (_wcsnicmp(output.c_str() + pos, token, tokenLength) == 0)
+            const size_t tokenLength = tokens[t].size();
+            size_t pos = 0;
+            while (pos + tokenLength <= output.size())
             {
-                output.replace(pos, tokenLength, replacement);
-                pos += replacement.size();
-            }
-            else
-            {
-                ++pos;
+                if (_wcsnicmp(output.c_str() + pos, tokens[t].c_str(), tokenLength) == 0)
+                {
+                    output.replace(pos, tokenLength, replacements[t]);
+                    pos += replacements[t].size();
+                }
+                else
+                {
+                    ++pos;
+                }
             }
         }
 
@@ -284,11 +314,9 @@ namespace winrt::CrumbsBrowser::implementation
         // The startup URL can be configured via the CRUMBS_STARTUP_URL environment variable or appsettings.json files located in either the user's LocalAppData or the ProgramFiles directory. 
         // The environment variable takes precedence over the configuration files, and the user's LocalAppData file takes precedence over the ProgramFiles file.
 
-        ConfigLib::Configuration config("Crumbs", "Development");
-
-        //int maxItems = config.getInt("App/MaxItems", 10);
-        //bool debug = config.getBool("Logging/DebugEnabled", false);
-        //auto servers = config.getArray("App/Servers");
+        //int maxItems = appConfiguration.getInt("App/MaxItems", 10);
+        //bool debug = appConfiguration.getBool("Logging/DebugEnabled", false);
+        //auto servers = appConfiguration.getArray("App/Servers");
 
         //std::cout << "Max items: " << maxItems << "\n";
         //std::cout << "Debug: " << std::boolalpha << debug << "\n";
@@ -296,11 +324,9 @@ namespace winrt::CrumbsBrowser::implementation
         //for (auto& s : servers)
         //    std::cout << "Server: " << s.get<std::string>() << "\n";
 
-        RequireHttps = config.getBool("Security/RequireHttps", false);
-
-		auto sUrl = config.getString("Startup/Url", "");
+		auto sUrl = appConfiguration.getString("Startup/Url", "");
 		if (!sUrl.empty()) {
-			auto arguments = config.getArray("Startup/Arguments");
+			auto arguments = appConfiguration.getArray("Startup/Arguments");
 			bool first = true;
 			for (auto& arg : arguments)
 			{

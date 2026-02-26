@@ -1,6 +1,7 @@
 #pragma once
 
 #include "MainWindow.g.h"
+#include "configuration.hpp"
 
 namespace winrt::CrumbsBrowser::implementation
 {
@@ -27,6 +28,7 @@ namespace winrt::CrumbsBrowser::implementation
             std::optional<winrt::hstring> ResolveStartupUrl();
             winrt::hstring ReplaceTokensInString(winrt::hstring replaceIn);
             bool RequireHttps{ false };
+            ConfigLib::Configuration appConfiguration{ "Crumbs", "Development" };
     };
 }
 

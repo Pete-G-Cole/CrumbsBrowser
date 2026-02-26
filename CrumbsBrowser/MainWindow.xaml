@@ -52,7 +52,7 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="4,4,8,4">
+        <Grid x:Name="uiGrid" Grid.Row="1" Grid.ColumnSpan="2" Margin="4,4,8,4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="*"/>
