@@ -279,11 +279,13 @@ namespace winrt::CrumbsBrowser::implementation
 
     void MainWindow::AddressBar_GotFocus(IInspectable const&, RoutedEventArgs const&)
     {
+        addressBarBorder().BorderThickness({ 1.5, 1.5, 1.5, 1.5 });
         addressBarBorder().BorderBrush(SolidColorBrush({ 255, 0, 120, 212 }));
     }
 
     void MainWindow::AddressBar_LostFocus(IInspectable const&, RoutedEventArgs const&)
     {
-        addressBarBorder().BorderBrush(SolidColorBrush({ 255, 153, 153, 153 }));
+        addressBarBorder().BorderThickness({ 1.125, 1.125, 1.125, 1.125 });
+        addressBarBorder().BorderBrush(SolidColorBrush({ 255, 200, 200, 200 }));
     }
 }
