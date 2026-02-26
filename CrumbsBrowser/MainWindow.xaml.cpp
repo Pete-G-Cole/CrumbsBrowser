@@ -131,6 +131,21 @@ namespace winrt::CrumbsBrowser::implementation
                 titleBarText().Text(pageTitle.empty() ? Title() : pageTitle);
             });
 
+        WebBrowser().CoreWebView2().HistoryChanged(
+            [this](CoreWebView2 const& sender, IInspectable const&)
+            {
+                backButton().IsEnabled(sender.CanGoBack());
+                forwardButton().IsEnabled(sender.CanGoForward());
+            });
+
+        WebBrowser().CoreWebView2().SourceChanged(
+            [this](CoreWebView2 const& sender, CoreWebView2SourceChangedEventArgs const&)
+            {
+                addressBar().Text(sender.Source());
+            });
+
+        refreshButton().IsEnabled(true);
+
         try
         {
             if (auto startUrl = ResolveStartupUrl())
@@ -275,6 +290,21 @@ namespace winrt::CrumbsBrowser::implementation
 		}
 
         return std::nullopt;
+    }
+
+    void MainWindow::BackButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        WebBrowser().CoreWebView2().GoBack();
+    }
+
+    void MainWindow::ForwardButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        WebBrowser().CoreWebView2().GoForward();
+    }
+
+    void MainWindow::RefreshButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        WebBrowser().CoreWebView2().Reload();
     }
 
     void MainWindow::AddressBar_GotFocus(IInspectable const&, RoutedEventArgs const&)
