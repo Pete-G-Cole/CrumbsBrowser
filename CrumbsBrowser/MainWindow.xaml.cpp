@@ -160,6 +160,7 @@ namespace winrt::CrumbsBrowser::implementation
         WebBrowser().CoreWebView2().HistoryChanged(
             [this](CoreWebView2 const& sender, IInspectable const&)
             {
+				bool canGoBack = sender.CanGoBack();
                 backButton().IsEnabled(sender.CanGoBack());
                 forwardButton().IsEnabled(sender.CanGoForward());
             });
@@ -170,12 +171,44 @@ namespace winrt::CrumbsBrowser::implementation
                 addressBar().Text(sender.Source());
             });
 
-        refreshButton().IsEnabled(true);
-        RequireHttps = appConfiguration.getBool("Security/RequireHttps", false);
-		if ( appConfiguration.getBool("NoUI", false) )
+		refreshButton().IsEnabled(true);
+		RequireHttps = appConfiguration.getBool("Security/RequireHttps", false);
+
+		const bool showNavButtons = appConfiguration.getBool("UI/NavigationButtons", true);
+		const bool showHomeButton  = appConfiguration.getBool("UI/HomeButton",        true);
+		const bool showAddressBar  = appConfiguration.getBool("UI/AddressBar",        true);
+
+		if (!showNavButtons)
+			navButtonsPanel().Visibility(Visibility::Collapsed);
+
+		if (!showHomeButton)
+			homeButton().Visibility(Visibility::Collapsed);
+
+		if (!showNavButtons || !showHomeButton)
+			navHomeSeparator().Visibility(Visibility::Collapsed);
+
+		if (!showAddressBar)
+			addressBarBorder().Visibility(Visibility::Collapsed);
+
+        if (!showAddressBar)
         {
-			// If NoUI mode is enabled, hide buttons and address bar to create a more immersive experience.
-			uiGrid().Visibility(Visibility::Collapsed);
+            // Move the nav controls panel out of the toolbar row and into the
+            // title bar, anchored to the left edge of the window.
+            auto navPanel = navControlsPanel();
+
+            auto uiChildren = uiGrid().Children();
+            uint32_t idx{};
+            if (uiChildren.IndexOf(navPanel, idx))
+                uiChildren.RemoveAt(idx);
+
+            navPanel.HorizontalAlignment(HorizontalAlignment::Left);
+            navPanel.VerticalAlignment(VerticalAlignment::Center);
+            navPanel.Margin({ 4, 0, 0, 0 });
+
+            titleBarGrid().Children().Append(navPanel);
+
+            // Collapse the now-empty toolbar row so it takes no space.
+            uiGrid().Visibility(Visibility::Collapsed);
         }
 
         try

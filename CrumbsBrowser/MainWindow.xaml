@@ -58,10 +58,10 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <StackPanel x:Name="navControlsPanel" Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
 
                 <!-- Navigation group: back, forward, refresh -->
-                <StackPanel Orientation="Horizontal" Spacing="2">
+                <StackPanel x:Name="navButtonsPanel" Orientation="Horizontal" Spacing="2">
                     <Button x:Name="backButton"
                             Style="{StaticResource NavButtonStyle}"
                             IsEnabled="False"
@@ -86,7 +86,7 @@
                 </StackPanel>
 
                 <!-- Group separator -->
-                <Rectangle Width="1" Height="16" Fill="#30000000" Margin="4,0"/>
+                <Rectangle x:Name="navHomeSeparator" Width="1" Height="16" Fill="#30000000" Margin="4,0"/>
 
                 <!-- Home group -->
                 <Button x:Name="homeButton"
@@ -124,7 +124,7 @@
         </Grid>
 
         <WebView2 x:Name="WebBrowser" Grid.Row="2" Grid.ColumnSpan="2"
-                  Source="about:blank" HorizontalAlignment="Stretch"
+                  HorizontalAlignment="Stretch"
                   VerticalAlignment="Stretch" NavigationStarting="EnsureHttps"/>
     </Grid>
 </Window>
