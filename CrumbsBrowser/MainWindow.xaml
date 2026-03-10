@@ -58,31 +58,48 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Orientation="Horizontal"
-                        VerticalAlignment="Center" Spacing="2">
-                <Button x:Name="backButton"
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+
+                <!-- Navigation group: back, forward, refresh -->
+                <StackPanel Orientation="Horizontal" Spacing="2">
+                    <Button x:Name="backButton"
+                            Style="{StaticResource NavButtonStyle}"
+                            IsEnabled="False"
+                            Click="BackButton_Click"
+                            ToolTipService.ToolTip="Back">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE76B;" FontSize="14"/>
+                    </Button>
+                    <Button x:Name="forwardButton"
+                            Style="{StaticResource NavButtonStyle}"
+                            IsEnabled="False"
+                            Click="ForwardButton_Click"
+                            ToolTipService.ToolTip="Forward">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE76C;" FontSize="14"/>
+                    </Button>
+                    <Button x:Name="refreshButton"
+                            Style="{StaticResource NavButtonStyle}"
+                            IsEnabled="False"
+                            Click="RefreshButton_Click"
+                            ToolTipService.ToolTip="Refresh">
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="14"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Group separator -->
+                <Rectangle Width="1" Height="16" Fill="#30000000" Margin="4,0"/>
+
+                <!-- Home group -->
+                <Button x:Name="homeButton"
                         Style="{StaticResource NavButtonStyle}"
                         IsEnabled="False"
-                        Click="BackButton_Click"
-                        ToolTipService.ToolTip="Back">
-                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE76B;" FontSize="14"/>
+                        Click="HomeButton_Click"
+                        ToolTipService.ToolTip="Home">
+                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE80F;" FontSize="14"/>
                 </Button>
-                <Button x:Name="forwardButton"
-                        Style="{StaticResource NavButtonStyle}"
-                        IsEnabled="False"
-                        Click="ForwardButton_Click"
-                        ToolTipService.ToolTip="Forward">
-                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE76C;" FontSize="14"/>
-                </Button>
-                <Button x:Name="refreshButton"
-                        Style="{StaticResource NavButtonStyle}"
-                        IsEnabled="False"
-                        Click="RefreshButton_Click"
-                        ToolTipService.ToolTip="Refresh">
-                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE72C;" FontSize="14"/>
-                </Button>
+
             </StackPanel>
 
+            
             <Border x:Name="addressBarBorder"
                     Grid.Column="1"
                     Height="28" Margin="4,4,4,4"

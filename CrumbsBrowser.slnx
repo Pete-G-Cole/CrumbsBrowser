@@ -5,12 +5,13 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/Solution Items/">
+    <File Path=".github/copilot-instructions.md" />
     <File Path="README.md" />
     <File Path="Tools/CleanEnv.ps1" />
     <File Path="Tools/CreateEnv.ps1" />
   </Folder>
-  <Project Path="CrumbsBrowser (Package)/CrumbsBrowser (Package).wapproj" Type="c7167f0d-bc9f-4e6e-afe1-012c56b48db5">
+  <Project Path="O:/repos/CrumbsBrowser/CrumbsBrowser (Package)/CrumbsBrowser (Package).wapproj" Type="c7167f0d-bc9f-4e6e-afe1-012c56b48db5">
     <Deploy />
   </Project>
-  <Project Path="CrumbsBrowser/CrumbsBrowser.vcxproj" Id="c02d6b1f-3b1d-448e-afde-61927ee1fd3f" />
+  <Project Path="O:/repos/CrumbsBrowser/CrumbsBrowser/CrumbsBrowser.vcxproj" Id="c02d6b1f-3b1d-448e-afde-61927ee1fd3f" />
 </Solution>

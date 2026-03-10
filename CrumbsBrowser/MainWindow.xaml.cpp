@@ -183,9 +183,10 @@ namespace winrt::CrumbsBrowser::implementation
             if (auto startUrl = ResolveStartupUrl())
             {
                 startUrl = ReplaceTokensInString(*startUrl);
-                Uri uri{ *startUrl };
-                WebBrowser().Source(uri);
-                addressBar().Text(uri.AbsoluteUri());
+                m_startUri = Uri{ *startUrl };
+                homeButton().IsEnabled(true);
+                WebBrowser().Source(m_startUri);
+                addressBar().Text(m_startUri.AbsoluteUri());
             }
         }
         catch (hresult_error const&)
@@ -344,6 +345,14 @@ namespace winrt::CrumbsBrowser::implementation
 		}
 
         return std::nullopt;
+    }
+
+    void MainWindow::HomeButton_Click(IInspectable const&, RoutedEventArgs const&)
+    {
+        if (m_startUri)
+        {
+            WebBrowser().Source(m_startUri);
+        }
     }
 
     void MainWindow::BackButton_Click(IInspectable const&, RoutedEventArgs const&)

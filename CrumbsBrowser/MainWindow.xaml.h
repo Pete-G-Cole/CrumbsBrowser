@@ -23,11 +23,13 @@ namespace winrt::CrumbsBrowser::implementation
         void BackButton_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void ForwardButton_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
         void RefreshButton_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
+        void HomeButton_Click(winrt::Windows::Foundation::IInspectable const& sender, winrt::Microsoft::UI::Xaml::RoutedEventArgs const& args);
 
         private:
             std::optional<winrt::hstring> ResolveStartupUrl();
             winrt::hstring ReplaceTokensInString(winrt::hstring replaceIn);
             bool RequireHttps{ false };
+            winrt::Windows::Foundation::Uri m_startUri{ nullptr };
             ConfigLib::Configuration appConfiguration{ "Crumbs", "Development" };
     };
 }
