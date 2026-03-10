@@ -61,6 +61,45 @@ namespace winrt::CrumbsBrowser::implementation
     {
         InitializeComponent();
 
+        {
+            const bool showNavButtons = appConfiguration.getBool("UI/NavigationButtons", true);
+            const bool showHomeButton  = appConfiguration.getBool("UI/HomeButton",        true);
+            const bool showAddressBar  = appConfiguration.getBool("UI/AddressBar",        true);
+
+            if (!showNavButtons)
+                navButtonsPanel().Visibility(Visibility::Collapsed);
+
+            if (!showHomeButton)
+                homeButton().Visibility(Visibility::Collapsed);
+
+            if (!showNavButtons || !showHomeButton)
+                navHomeSeparator().Visibility(Visibility::Collapsed);
+
+            if (!showAddressBar)
+                addressBarBorder().Visibility(Visibility::Collapsed);
+
+            if (!showAddressBar)
+            {
+                // Move the nav controls panel out of the toolbar row and into the
+                // title bar, anchored to the left edge of the window.
+                auto navPanel = navControlsPanel();
+
+                auto uiChildren = uiGrid().Children();
+                uint32_t idx{};
+                if (uiChildren.IndexOf(navPanel, idx))
+                    uiChildren.RemoveAt(idx);
+
+                navPanel.HorizontalAlignment(HorizontalAlignment::Left);
+                navPanel.VerticalAlignment(VerticalAlignment::Center);
+                navPanel.Margin({ 4, 0, 0, 0 });
+
+                titleBarGrid().Children().Append(navPanel);
+
+                // Collapse the now-empty toolbar row so it takes no space.
+                uiGrid().Visibility(Visibility::Collapsed);
+            }
+        }
+
         ExtendsContentIntoTitleBar(true);
         SetTitleBar(titleBarGrid());
 
@@ -174,44 +213,7 @@ namespace winrt::CrumbsBrowser::implementation
 		refreshButton().IsEnabled(true);
 		RequireHttps = appConfiguration.getBool("Security/RequireHttps", false);
 
-		const bool showNavButtons = appConfiguration.getBool("UI/NavigationButtons", true);
-		const bool showHomeButton  = appConfiguration.getBool("UI/HomeButton",        true);
-		const bool showAddressBar  = appConfiguration.getBool("UI/AddressBar",        true);
-
-		if (!showNavButtons)
-			navButtonsPanel().Visibility(Visibility::Collapsed);
-
-		if (!showHomeButton)
-			homeButton().Visibility(Visibility::Collapsed);
-
-		if (!showNavButtons || !showHomeButton)
-			navHomeSeparator().Visibility(Visibility::Collapsed);
-
-		if (!showAddressBar)
-			addressBarBorder().Visibility(Visibility::Collapsed);
-
-        if (!showAddressBar)
-        {
-            // Move the nav controls panel out of the toolbar row and into the
-            // title bar, anchored to the left edge of the window.
-            auto navPanel = navControlsPanel();
-
-            auto uiChildren = uiGrid().Children();
-            uint32_t idx{};
-            if (uiChildren.IndexOf(navPanel, idx))
-                uiChildren.RemoveAt(idx);
-
-            navPanel.HorizontalAlignment(HorizontalAlignment::Left);
-            navPanel.VerticalAlignment(VerticalAlignment::Center);
-            navPanel.Margin({ 4, 0, 0, 0 });
-
-            titleBarGrid().Children().Append(navPanel);
-
-            // Collapse the now-empty toolbar row so it takes no space.
-            uiGrid().Visibility(Visibility::Collapsed);
-        }
-
-        try
+		try
         {
             if (auto startUrl = ResolveStartupUrl())
             {
