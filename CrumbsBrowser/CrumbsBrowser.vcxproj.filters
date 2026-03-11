@@ -16,6 +16,7 @@
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="Configuration.hpp" />
+    <ClInclude Include="UrlUtils.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Assets">
@@ -42,5 +43,9 @@
   </ItemGroup>
   <ItemGroup>
     <PRIResource Include="Strings\en-GB\Resources.resw" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natvis" />
+    <Natvis Include="$(MSBuildThisFileDirectory)..\..\natvis\wil.natstepfilter" />
   </ItemGroup>
 </Project>

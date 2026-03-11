@@ -1,0 +1,17 @@
+# ninja log v7
+46	1349	7949511757332356	googletest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.obj	4aadca802c4af9b
+32	1652	7949511757185095	googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.obj	20143b45b2fd58d0
+25	2631	7949511757114794	googlemock/CMakeFiles/gmock_main.dir/src/gmock-all.cc.obj	1a1df9d9eafd7ca6
+15	2714	7949511757014434	googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.obj	32fa75365f0a284c
+4	5233	7949511756904248	googletest/CMakeFiles/gtest.dir/src/gtest-all.cc.obj	10fb13df2c6fd9be
+20	5539	7949511757066256	googlemock/CMakeFiles/gmock_main.dir/__/googletest/src/gtest-all.cc.obj	2e15bdbb5b6b90af
+5233	5715	7949511813513266	bin/gtest.dll	3c1411940519d754
+5233	5715	7949511813513266	lib/gtest.lib	3c1411940519d754
+5539	5966	7949511816006554	bin/gmock_main.dll	28f63439bec0c256
+5539	5966	7949511816006554	lib/gmock_main.lib	28f63439bec0c256
+5716	5997	7949511816465941	bin/gtest_main.dll	396e14778053287e
+5716	5997	7949511816465941	lib/gtest_main.lib	396e14778053287e
+10	6687	7949511756973818	googlemock/CMakeFiles/gmock.dir/__/googletest/src/gtest-all.cc.obj	b078048b3bf4ceca
+6687	7047	7949511826892331	bin/gmock.dll	3b92aee28343d285
+6687	7047	7949511826892331	lib/gmock.lib	3b92aee28343d285
+7047	7782	7949511827336622	CMakeFiles/install.util	2f318f6745b2c8ee

@@ -27,7 +27,6 @@ namespace winrt::CrumbsBrowser::implementation
 
         private:
             std::optional<winrt::hstring> ResolveStartupUrl();
-            winrt::hstring ReplaceTokensInString(winrt::hstring replaceIn);
             bool RequireHttps{ false };
             winrt::Windows::Foundation::Uri m_startUri{ nullptr };
             ConfigLib::Configuration appConfiguration{ "Crumbs", "Development" };

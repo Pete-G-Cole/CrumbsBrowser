@@ -17,6 +17,7 @@
 #include <winrt/Microsoft.UI.Windowing.h>
 #include <Microsoft.UI.Xaml.Window.h>
 #include <Lmcons.h>
+#include "UrlUtils.hpp"
 
 using namespace winrt;
 using namespace Microsoft::UI::Xaml;
@@ -199,7 +200,6 @@ namespace winrt::CrumbsBrowser::implementation
         WebBrowser().CoreWebView2().HistoryChanged(
             [this](CoreWebView2 const& sender, IInspectable const&)
             {
-				bool canGoBack = sender.CanGoBack();
                 backButton().IsEnabled(sender.CanGoBack());
                 forwardButton().IsEnabled(sender.CanGoForward());
             });
@@ -217,7 +217,7 @@ namespace winrt::CrumbsBrowser::implementation
         {
             if (auto startUrl = ResolveStartupUrl())
             {
-                startUrl = ReplaceTokensInString(*startUrl);
+                startUrl = ::CrumbsBrowser::ReplaceTokens(std::wstring(*startUrl));
                 m_startUri = Uri{ *startUrl };
                 homeButton().IsEnabled(true);
                 WebBrowser().Source(m_startUri);
@@ -279,63 +279,7 @@ namespace winrt::CrumbsBrowser::implementation
         }
     }
 
-    hstring MainWindow::ReplaceTokensInString(hstring replaceIn)
-    {
-        const std::wstring tokens[] = {
-            L"[USERNAME]",
-			L"[COMPUTERNAME]",
-            L"[OS]"
-        };
-
-        std::wstring replacements[std::size(tokens)];
-
-        // [USERNAME]: current Windows user name
-        wchar_t userName[UNLEN + 1]{};
-        DWORD userNameSize = static_cast<DWORD>(std::size(userName));
-        if (GetUserNameW(userName, &userNameSize))
-        {
-            replacements[0] = userName;
-        }
-
-		// [COMPUTERNAME]: current Windows machine name
-        wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1]{};
-        DWORD computerNameSize = static_cast<DWORD>(std::size(computerName));
-        if (GetComputerNameW(computerName, &computerNameSize))
-        {
-            replacements[1] = computerName;
-        }
-
-        // [OS]: value of the OS environment variable (e.g. "Windows_NT")
-        wchar_t osEnv[256]{};
-        DWORD osLen = GetEnvironmentVariableW(L"OS", osEnv, static_cast<DWORD>(std::size(osEnv)));
-        if (osLen > 0 && osLen < static_cast<DWORD>(std::size(osEnv)))
-        {
-            replacements[2] = osEnv;
-        }
-
-        std::wstring output{ replaceIn.c_str(), replaceIn.size() };
-
-        for (size_t t = 0; t < std::size(tokens); ++t)
-        {
-            const size_t tokenLength = tokens[t].size();
-            size_t pos = 0;
-            while (pos + tokenLength <= output.size())
-            {
-                if (_wcsnicmp(output.c_str() + pos, tokens[t].c_str(), tokenLength) == 0)
-                {
-                    output.replace(pos, tokenLength, replacements[t]);
-                    pos += replacements[t].size();
-                }
-                else
-                {
-                    ++pos;
-                }
-            }
-        }
-
-        return hstring{ output };
-    }
-
+    
     int32_t MainWindow::MyProperty()
     {
         throw hresult_not_implemented();

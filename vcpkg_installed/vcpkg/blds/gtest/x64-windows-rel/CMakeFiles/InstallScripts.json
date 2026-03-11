@@ -1,0 +1,9 @@
+{
+	"InstallScripts" : 
+	[
+		"O:/repos/CrumbsBrowser/vcpkg_installed/vcpkg/blds/gtest/x64-windows-rel/cmake_install.cmake",
+		"O:/repos/CrumbsBrowser/vcpkg_installed/vcpkg/blds/gtest/x64-windows-rel/googlemock/cmake_install.cmake",
+		"O:/repos/CrumbsBrowser/vcpkg_installed/vcpkg/blds/gtest/x64-windows-rel/googletest/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
