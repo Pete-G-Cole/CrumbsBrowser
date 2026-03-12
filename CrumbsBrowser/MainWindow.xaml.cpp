@@ -64,8 +64,8 @@ namespace winrt::CrumbsBrowser::implementation
 
         {
             const bool showNavButtons = appConfiguration.getBool("UI/NavigationButtons", true);
-            const bool showHomeButton  = appConfiguration.getBool("UI/HomeButton",        true);
-            const bool showAddressBar  = appConfiguration.getBool("UI/AddressBar",        true);
+            const bool showHomeButton  = appConfiguration.getBool("UI/HomeButton", true);
+            const bool showAddressBar  = appConfiguration.getBool("UI/AddressBar", true);
 
             if (!showNavButtons)
                 navButtonsPanel().Visibility(Visibility::Collapsed);

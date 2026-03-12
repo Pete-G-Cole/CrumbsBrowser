@@ -35,7 +35,11 @@ The configuration heirarchy (lowest to highest) is:
 			"Value": "999"
 		}]
 	},
-	"NoUI": true,
+	"UI": {
+		"AddressBar": true,
+		"NavigationButtons": true,
+		"HomeButton": true
+	},
 	"Security": {
 		"RequireHttps": false
 	}
@@ -50,7 +54,9 @@ Other examples include:
 
 - `CRUMBS_STARTUP__ARGUMENTS__0__NAME` would override the name of the first argument in the Arguments array.
 - `CRUMBS_STARTUP__ARGUMENTS__0__VALUE` would override the value of the first argument in the Arguments array.
-- `CRUMBS_NOUI=false` would override the NoUI setting.
+- `CRUMBS_UI__ADDRESSBAR=false` would override the AddressBar to hidden.
+- `CRUMBS_UI__NAVIGATIONBUTTONS=false` would override the NavigationButtons to hidden.
+- `CRUMBS_UI__HOMEBUTTON=false` would override the HomeButton to hidden.
 - `CRUMBS_SECURITY__REQUIREHTTPS=false` would set the Security:RequireHttps setting to false.
 
 ### Explanation of Keys
@@ -68,10 +74,21 @@ Place holders are replaced at runtime with actual values. Supported place holder
 - [USERNAME]: The current user's username.
 - [OS]: The operating system (typically Windows_NT).
 
-#### NoUI
-A Boolean flag determining whether the UI such as address bar, back and forward buttons are hidden.
-- true → The application runs without visible UI elements.
+#### UI
+UI configuration settings.
+- **AddressBar**: Determines whether the address bar is visible.
+  - true → The address bar is visible.
+  - false → The address bar is hidden.
+- **NavigationButtons**: Determines whether the navigation buttons (back and forwards) are visible.
+  - true → The navigation buttons are visible.
+  - false → The navigation buttons are hidden.
+- **HomeButton**: Determines whether the home button is visible.
+  - true → The home button is visible.
+  - false → The home button is hidden.
 
+If a setting is not specified, the default value is true, meaning the UI element will be visible.
+
+If address bar is hidden, the user can still navigate to a different URL by using the home button or navigation buttons (if they are visible) or by clicking on links within the web page. If the navigation buttons are shown they are folded into the title bar.
 #### Security
 Security-related configuration.
 - **RequireHttps**: Determines whether HTTPS is required.
