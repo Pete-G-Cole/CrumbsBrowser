@@ -95,4 +95,81 @@ Security-related configuration.
   - false → HTTPS is not required.
 
 
+## Where to next
 
+You already confirmed earlier that WebResourceRequested works for http://127.0.0.1:41190. This API is a natural REST API:
+
+```
+POST   /print/current              → 202 { "jobId": "j1" }   (print current HTML)
+POST   /print/html/document        → 202 { "jobId": "j2" }   (body: { url, printerName, ... })
+POST   /print/html/string          → 202 { "jobId": "j3" }   (body: { html, printerName, ... })
+POST   /print/pdf                  → 202 { "jobId": "j4" }   (body: { url, printerName, ... })
+GET    /print/jobs/{id}            → { status, progress, error }
+GET    /print/jobs                 → [{ jobId, status }, ...]
+GET    /print/spooling/complete    → blocks until queue empty (long-poll)
+
+GET    /printers                   → [{ name, isDefault, mediaSize[], duplex, color, ... }]
+GET    /printers/{name}            → full printer properties
+
+POST   /zpl/print                  → 202 { "jobId": "j5" }
+GET    /zpl/jobs/{id}              → { status, ... }`
+```
+
+```javascript
+// No special wrappers needed - standard fetch() works directly
+const res  = await fetch('http://127.0.0.1:41190/print/html/document', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: 'https://example.com/report', printerName: 'HP LaserJet', copies: 2 })
+});
+const { jobId } = await res.json();
+
+// Poll for completion
+let status;
+do {
+    await new Promise(r => setTimeout(r, 500));
+    status = await (await fetch(`http://127.0.0.1:41190/print/jobs/${jobId}`)).json();
+} while (status.status === 'printing');`
+```
+
+## Evidence
+
+Yes, confirmed. WebResourceRequested works for http:// URLs including 127.0.0.1 and localhost, and fires for both GET and POST fetch() calls. Since your project uses WinRT C++/WinRT style (not COM), here is the correct pattern matching your existing codebase:
+
+```cpp
+// Register two filters — one for each host/port
+m_webView.CoreWebView2().AddWebResourceRequestedFilter(
+    L"http://127.0.0.1:41190/*",
+    CoreWebView2WebResourceContext::All);
+
+m_webView.CoreWebView2().AddWebResourceRequestedFilter(
+    L"http://localhost:41191/*",
+    CoreWebView2WebResourceContext::All);
+
+m_webView.CoreWebView2().WebResourceRequested(
+    [this](CoreWebView2 const&, CoreWebView2WebResourceRequestedEventArgs const& args)
+    {
+        auto request = args.Request();
+        auto uri     = request.Uri();       // e.g. L"http://127.0.0.1:41190/api/data"
+        auto method  = request.Method();    // L"GET" or L"POST"
+
+        // Build JSON response body as an IRandomAccessStream
+        std::string json = R"({"status":"ok","source":"CrumbsBrowser"})";
+        auto stream = Windows::Storage::Streams::InMemoryRandomAccessStream();
+        Windows::Storage::Streams::DataWriter writer(stream);
+        writer.WriteBytes(winrt::array_view<const uint8_t>(
+            reinterpret_cast<const uint8_t*>(json.data()),
+            reinterpret_cast<const uint8_t*>(json.data() + json.size())));
+        writer.StoreAsync().get();
+        writer.DetachStream();
+        stream.Seek(0);
+
+        auto response = m_webView.CoreWebView2().Environment().CreateWebResourceResponse(
+            stream,
+            200,
+            L"OK",
+            L"Content-Type: application/json\r\nAccess-Control-Allow-Origin: *");
+
+        args.Response(response);
+    });
+```
