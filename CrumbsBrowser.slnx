@@ -1,5 +1,6 @@
 <Solution>
   <Configurations>
+    <Platform Name="Any CPU" />
     <Platform Name="ARM64" />
     <Platform Name="x64" />
     <Platform Name="x86" />
@@ -14,7 +15,13 @@
     <Platform Solution="*|ARM64" Project="x64" />
   </Project>
   <Project Path="O:/repos/CrumbsBrowser/CrumbsBrowser (Package)/CrumbsBrowser (Package).wapproj" Type="c7167f0d-bc9f-4e6e-afe1-012c56b48db5">
+    <Platform Solution="*|Any CPU" Project="x64" />
     <Deploy />
   </Project>
   <Project Path="O:/repos/CrumbsBrowser/CrumbsBrowser/CrumbsBrowser.vcxproj" Id="c02d6b1f-3b1d-448e-afde-61927ee1fd3f" />
+  <Project Path="TestSite/TestSite.esproj">
+    <Platform Project="AnyCPU" />
+    <Build />
+    <Deploy />
+  </Project>
 </Solution>

@@ -12,11 +12,14 @@
   <ItemGroup>
     <ClCompile Include="pch.cpp" />
     <ClCompile Include="$(GeneratedFilesDir)module.g.cpp" />
+    <ClCompile Include="PrintApiRouter.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
     <ClInclude Include="Configuration.hpp" />
     <ClInclude Include="UrlUtils.hpp" />
+    <ClInclude Include="PrintApiRouter.hpp" />
+    <ClInclude Include="StringUtils.hpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Assets">
@@ -32,6 +35,7 @@
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="appsettings.json" />
+    <None Include="appsettings.local.json" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\file.ico">

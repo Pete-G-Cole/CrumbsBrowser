@@ -1,7 +1,9 @@
 #pragma once
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Advapi32.lib")
+#pragma comment(lib, "Winspool.lib")
 #include <windows.h>
+#include <winspool.h>
 #include <shlobj.h>
 #include <unknwn.h>
 #include <restrictederrorinfo.h>

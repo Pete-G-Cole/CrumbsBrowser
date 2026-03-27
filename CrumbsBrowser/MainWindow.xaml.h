@@ -2,6 +2,7 @@
 
 #include "MainWindow.g.h"
 #include "configuration.hpp"
+#include "PrintApiRouter.hpp"
 
 namespace winrt::CrumbsBrowser::implementation
 {
@@ -30,6 +31,7 @@ namespace winrt::CrumbsBrowser::implementation
             bool RequireHttps{ false };
             winrt::Windows::Foundation::Uri m_startUri{ nullptr };
             ConfigLib::Configuration appConfiguration{ "Crumbs", "Development" };
+            ::CrumbsBrowser::PrintApiRouter m_apiRouter;
     };
 }
 

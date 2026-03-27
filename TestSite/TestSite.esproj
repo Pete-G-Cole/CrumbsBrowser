@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.4338480">
+
+  <PropertyGroup>
+    <!-- Equivalent to StartupFile: server.js in .njsproj -->
+    <StartupCommand>npm start</StartupCommand>
+
+    <!-- No build step needed - this is a static file server -->
+    <ShouldRunBuildScript>false</ShouldRunBuildScript>
+
+    <!-- Equivalent to StartBrowser: true in .njsproj -->
+    <StartWebServerOnF5>true</StartWebServerOnF5>
+
+    <!-- Matches the console.log output in server.js to detect when ready -->
+    <WebServerReadyMessage>running at</WebServerReadyMessage>
+
+    <!-- Equivalent to LaunchUrl / BrowserUrl in .njsproj -->
+    <BrowserUrl>http://localhost:8080</BrowserUrl>
+
+    <!-- Equivalent to DebuggerPort in .njsproj -->
+    <DebuggingPort>5858</DebuggingPort>
+
+    <!-- Equivalent to ProjectView: ShowAllFiles in .njsproj -->
+    <ProjectView>ShowAllFiles</ProjectView>
+  </PropertyGroup>
+
+  <!-- Equivalent to the ItemGroup content in .njsproj -->
+  <ItemGroup>
+    <Content Include="public\index.html" />
+    <Content Include="package.json" />
+    <None Include="server.js" />
+  </ItemGroup>
+
+</Project>

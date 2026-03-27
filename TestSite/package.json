@@ -1,0 +1,11 @@
+{
+  "name": "crumbs-browser-testsite",
+  "version": "1.0.0",
+  "description": "Local test site for CrumbsBrowser development",
+  "scripts": {
+    "start": "http-server ./public -p 8080 --cors -o"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
