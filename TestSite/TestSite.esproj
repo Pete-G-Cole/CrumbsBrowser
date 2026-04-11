@@ -26,6 +26,8 @@
   <!-- Equivalent to the ItemGroup content in .njsproj -->
   <ItemGroup>
     <Content Include="public\index.html" />
+    <Content Include="public\TestElectron.html" />
+    <Content Include="public\electron-api.js" />
     <Content Include="package.json" />
     <None Include="server.js" />
   </ItemGroup>
