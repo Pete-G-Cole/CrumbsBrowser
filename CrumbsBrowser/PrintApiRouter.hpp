@@ -44,6 +44,10 @@ private:
     // ---- Route handlers ------------------------------------------------
     nlohmann::json HandleGetPrinters();
     nlohmann::json HandleGetPrinterByName(std::string const& name);
+    nlohmann::json HandlePostPrint(nlohmann::json const& options);
+
+    // ---- Request helpers -----------------------------------------------
+    nlohmann::json ReadRequestBodyJson(winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args);
 
     // ---- Response helpers ----------------------------------------------
     void SendJsonResponse(
@@ -60,11 +64,15 @@ private:
     void SendCorsPreflightResponse(
         winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args);
 
+    // ---- Print settings helpers ----------------------------------------
+    winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintSettings BuildPrintSettings(nlohmann::json const& options);
+
     // ---- Printer helpers -----------------------------------------------
     static nlohmann::json PrinterInfoToJson(PRINTER_INFO_2W const& info, bool includeCapabilities);
     static nlohmann::json DevModeDefaults(DEVMODEW const& dm);
     static std::string    PaperSizeToString(short dmPaperSize);
     static std::string    PrinterStatusToString(DWORD status);
+    static std::string    GetAppVersion();
 
     // ---- URL helpers ---------------------------------------------------
     static std::string              ExtractPath(std::string const& url);

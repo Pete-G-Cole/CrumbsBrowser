@@ -61,6 +61,26 @@
 
     /**
      * Returns a list of available system printers.
+     * Equivalent to Electron's webContents.getPrintersAsync().
+     *
+     * @returns {Promise<Array<{
+     *   name: string,
+     *   isDefault: boolean,
+     *   status: string,
+     *   portName: string,
+     *   driverName: string,
+     *   defaults: object
+     * }>>}
+     */
+    async function getPrintersAsync() {
+        await requireAvailable();
+        const res = await fetch(`${apiBase}/printers`);
+        if (!res.ok) throw new Error(`getPrinters failed: HTTP ${res.status}`);
+        return res.json();
+    }
+
+    /**
+     * Returns a list of available system printers.
      * Equivalent to Electron's webContents.getPrinters().
      *
      * @returns {Promise<Array<{
@@ -73,17 +93,14 @@
      * }>>}
      */
     async function getPrinters() {
-        await requireAvailable();
-        const res = await fetch(`${apiBase}/printers`);
-        if (!res.ok) throw new Error(`getPrinters failed: HTTP ${res.status}`);
-        return res.json();
+        return getPrintersAsync();
     }
 
     /**
      * Returns detail for a single printer including its capabilities.
-     * Equivalent to Electron's webContents.getPrinterByName() (Electron 22+).
+     * Useful addition - not implemented in Electron's webContents.*
      *
-     * @param {string} name  Printer name as returned by getPrinters().
+     * @param {string} name  Printer name as returned by getPrintersAsync().
      * @returns {Promise<object>}
      */
     async function getPrinterByName(name) {
@@ -150,11 +167,12 @@
     }
 
     // -------------------------------------------------------------------------
-    // Expose as window.electronAPI  (mirrors Electron's contextBridge pattern)
+    // Expose as window.webContents  (as per Electron)
     // -------------------------------------------------------------------------
 
-    global.electronAPI = {
+    global.webContents = {
         isAvailable,
+        getPrintersAsync,
         getPrinters,
         getPrinterByName,
         print

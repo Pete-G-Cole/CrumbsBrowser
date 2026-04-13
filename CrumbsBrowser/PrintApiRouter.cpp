@@ -2,6 +2,8 @@
 #include "PrintApiRouter.hpp"
 #include "StringUtils.hpp"
 #include <winrt/Windows.Storage.Streams.h>
+#include <winrt/Windows.ApplicationModel.h>
+#include <future>
 
 using json = nlohmann::json;
 
@@ -64,6 +66,15 @@ void PrintApiRouter::OnWebResourceRequested(
 
         if (method == "GET")
         {
+            if (segments.size() == 1 && segments[0] == "ping")
+            {
+				json responseBody;
+                responseBody["status"] = "ok";
+                responseBody["app"] = "CrumbsBrowser";
+				responseBody["version"] = GetAppVersion();
+                SendJsonResponse(args, 200, "OK", responseBody);
+                return;
+            }
             if (segments.size() == 1 && segments[0] == "printers")
             {
                 SendJsonResponse(args, 200, "OK", HandleGetPrinters());
@@ -72,6 +83,15 @@ void PrintApiRouter::OnWebResourceRequested(
             if (segments.size() == 2 && segments[0] == "printers")
             {
                 SendJsonResponse(args, 200, "OK", HandleGetPrinterByName(segments[1]));
+                return;
+            }
+        }
+
+		if (method == "POST")
+        {
+            if (segments.size() == 1 && segments[0] == "print")
+            {
+                SendJsonResponse(args, 202, "Accepted", HandlePostPrint(ReadRequestBodyJson(args)));
                 return;
             }
         }
@@ -91,6 +111,18 @@ void PrintApiRouter::OnWebResourceRequested(
 // ---------------------------------------------------------------------------
 // Route handlers
 // ---------------------------------------------------------------------------
+
+// ===========================================================================
+// Print API  —  /ping | /printers/* | /print
+//
+// Provides an Electron-compatible printing interface backed by WebView2.
+// For each new API group add a matching section header and its handlers below.
+//
+//   GET  /ping              Health-check; confirms running in CrumbsBrowser.
+//   GET  /printers          Enumerate available printers.
+//   GET  /printers/{name}   Retrieve detail for a named printer.
+//   POST /print             Print the current page (silent or via dialog).
+// ===========================================================================
 
 json PrintApiRouter::HandleGetPrinters()
 {
@@ -138,6 +170,31 @@ json PrintApiRouter::HandleGetPrinterByName(std::string const& name)
     }
 
     throw HttpNotFoundException("Printer not found: " + name);
+}
+
+json PrintApiRouter::HandlePostPrint(json const& options)
+{
+    bool silent = options.value("silent", false);
+
+    if (!silent)
+    {
+        // Show the browser print dialog (non-silent mode)
+        m_webView.ShowPrintUI(CoreWebView2PrintDialogKind::Browser);
+    }
+    else
+    {
+        // Silent print to the specified (or default) printer
+        auto settings = BuildPrintSettings(options);
+        auto wv = m_webView;
+        [wv, settings]() -> winrt::fire_and_forget
+            {
+                co_await wv.PrintAsync(settings);
+            }();
+    }
+
+    json j;
+    j["status"] = "accepted";
+    return j;
 }
 
 // ---------------------------------------------------------------------------
@@ -257,6 +314,63 @@ std::string PrintApiRouter::PrinterStatusToString(DWORD status)
     return "unknown";
 }
 
+// ---- Print settings helpers ----------------------------------------
+
+CoreWebView2PrintSettings PrintApiRouter::BuildPrintSettings(json const& options)
+{
+    auto settings = m_webView.Environment().CreatePrintSettings();
+
+    if (options.contains("printerName") && options["printerName"].is_string())
+        settings.PrinterName(winrt::to_hstring(options["printerName"].get<std::string>()));
+
+    if (options.contains("copies") && options["copies"].is_number_integer())
+        settings.Copies(static_cast<int32_t>(options["copies"].get<int>()));
+
+    if (options.contains("duplex") && options["duplex"].is_boolean())
+        settings.Duplex(options["duplex"].get<bool>()
+            ? CoreWebView2PrintDuplex::TwoSidedLongEdge
+            : CoreWebView2PrintDuplex::OneSided);
+
+    if (options.contains("landscape") && options["landscape"].is_boolean())
+        settings.Orientation(options["landscape"].get<bool>()
+            ? CoreWebView2PrintOrientation::Landscape
+            : CoreWebView2PrintOrientation::Portrait);
+
+    if (options.contains("color") && options["color"].is_boolean())
+        settings.ColorMode(options["color"].get<bool>()
+            ? CoreWebView2PrintColorMode::Color
+            : CoreWebView2PrintColorMode::Grayscale);
+
+    return settings;
+}
+
+// ---------------------------------------------------------------------------
+// ---- Request helpers -----------------------------------------------
+// ---------------------------------------------------------------------------
+
+json PrintApiRouter::ReadRequestBodyJson(
+    CoreWebView2WebResourceRequestedEventArgs const& args)
+{
+    auto content = args.Request().Content();
+    if (!content) return json::object();
+
+    auto size = content.Size();
+    if (size == 0) return json::object();
+
+    content.Seek(0);
+    DataReader reader(content);
+    // LoadAsync().get() must not be called on the STA thread directly as it triggers
+    // a WinRT deadlock assertion. Dispatch the blocking wait to a background thread.
+    std::async(std::launch::async, [loadOp = reader.LoadAsync(static_cast<uint32_t>(size))]() { loadOp.get(); }).get();
+
+    std::vector<uint8_t> buf(static_cast<size_t>(size));
+    reader.ReadBytes(buf);
+
+    std::string bodyStr(reinterpret_cast<char const*>(buf.data()), buf.size());
+    auto parsed = json::parse(bodyStr, nullptr, false);
+    return parsed.is_discarded() ? json::object() : parsed;
+}
+
 // ---------------------------------------------------------------------------
 // Response helpers
 // ---------------------------------------------------------------------------
@@ -274,7 +388,10 @@ void PrintApiRouter::SendJsonResponse(
     writer.WriteBytes(winrt::array_view<uint8_t const>(
         reinterpret_cast<uint8_t const*>(bodyStr.data()),
         static_cast<uint32_t>(bodyStr.size())));
-    writer.StoreAsync().get();
+    // StoreAsync().get() must not be called on the STA thread directly as it triggers
+    // a WinRT deadlock assertion. Dispatch the blocking wait to a background thread;
+    // InMemoryRandomAccessStream is agile so the IAsyncAction is safe to use cross-thread.
+    std::async(std::launch::async, [storeOp = writer.StoreAsync()]() { storeOp.get(); }).get();
     writer.DetachStream();
     stream.Seek(0);
 
@@ -389,6 +506,24 @@ std::string PrintApiRouter::UrlDecode(std::string const& s)
     }
 
     return result;
+}
+
+std::string PrintApiRouter::GetAppVersion()
+{
+    try
+    {
+        auto package = winrt::Windows::ApplicationModel::Package::Current();
+        auto version = package.Id().Version();
+        
+        return std::to_string(version.Major) + "." +
+               std::to_string(version.Minor) + "." +
+               std::to_string(version.Build) + "." +
+               std::to_string(version.Revision);
+    }
+    catch (...)
+    {
+        return "0.0.0.0";  // Fallback if package info unavailable
+    }
 }
 
 } // namespace CrumbsBrowser

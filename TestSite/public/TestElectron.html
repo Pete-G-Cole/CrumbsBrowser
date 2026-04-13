@@ -155,11 +155,11 @@
             badge.className = 'badge pending';
             badge.textContent = 'Checking…';
             try {
-                const ok = await window.electronAPI.isAvailable();
+                const ok = await window.webContents.isAvailable();
                 setBadge('available-badge', ok, ok ? '✓ Available' : '✗ Not available');
                 showResult('available-result',
                     ok ? 'Running inside CrumbsBrowser — REST API is reachable.'
-                       : 'Not running inside CrumbsBrowser, or API is unreachable.');
+                        : 'Not running inside CrumbsBrowser, or API is unreachable.');
             } catch (e) {
                 setBadge('available-badge', false, '✗ Error');
                 showResult('available-result', `Error: ${e.message}`);
@@ -173,7 +173,7 @@
         async function runGetPrinters(populateSelect = false) {
             showResult('printers-result', 'Loading…');
             try {
-                const printers = await window.electronAPI.getPrinters();
+                const printers = await window.webContents.getPrintersAsync();
                 showResult('printers-result', printers);
 
                 if (populateSelect || true) {
@@ -208,7 +208,7 @@
             if (!name) { showResult('printer-detail-result', 'Enter a printer name first.'); return; }
             showResult('printer-detail-result', 'Loading…');
             try {
-                const printer = await window.electronAPI.getPrinterByName(name);
+                const printer = await window.webContents.getPrinterByName(name);
                 showResult('printer-detail-result', printer);
             } catch (e) {
                 showResult('printer-detail-result', `Error: ${e.message}`);
@@ -222,7 +222,7 @@
         async function runPrintDialog() {
             showResult('print-dialog-result', 'Requesting print dialog…');
             try {
-                const result = await window.electronAPI.print(
+                const result = await window.webContents.print(
                     { silent: false },
                     (success, reason) => {
                         setBadge('print-dialog-badge', success,
@@ -242,17 +242,17 @@
 
         async function runPrintSilent() {
             const options = {
-                silent:          true,
-                deviceName:      document.getElementById('opt-printer').value,
-                pageSize:        document.getElementById('opt-pagesize').value,
-                landscape:       document.getElementById('opt-landscape').checked,
-                color:           document.getElementById('opt-color').checked,
+                silent: true,
+                deviceName: document.getElementById('opt-printer').value,
+                pageSize: document.getElementById('opt-pagesize').value,
+                landscape: document.getElementById('opt-landscape').checked,
+                color: document.getElementById('opt-color').checked,
                 printBackground: document.getElementById('opt-bg').checked,
-                copies:          parseInt(document.getElementById('opt-copies').value, 10),
-                scaleFactor:     parseInt(document.getElementById('opt-scale').value, 10),
-                duplexMode:      document.getElementById('opt-duplex').value,
-                collate:         document.getElementById('opt-collate').checked,
-                pageRanges:      document.getElementById('opt-ranges').value.trim()
+                copies: parseInt(document.getElementById('opt-copies').value, 10),
+                scaleFactor: parseInt(document.getElementById('opt-scale').value, 10),
+                duplexMode: document.getElementById('opt-duplex').value,
+                collate: document.getElementById('opt-collate').checked,
+                pageRanges: document.getElementById('opt-ranges').value.trim()
             };
             // Remove empty optional strings to keep the payload clean
             if (!options.deviceName) delete options.deviceName;
@@ -260,7 +260,7 @@
 
             showResult('print-silent-result', `Sending:\n${JSON.stringify(options, null, 2)}`);
             try {
-                const result = await window.electronAPI.print(
+                const result = await window.webContents.print(
                     options,
                     (success, reason) => {
                         setBadge('print-silent-badge', success,
@@ -274,6 +274,24 @@
                 showResult('print-silent-result', `Error: ${e.message}`);
             }
         }
+
+        // ---------------
+        // test
+        //
+        function aTest() {
+            window.webContents.getPrintersAsync().then(printers => {
+                console.log('Printers (async):', printers);
+
+                const defaultPrinters = printers?.filter((p) => p.isDefault);
+                if (printers.length > 0) {
+                    console.log("Default: ",defaultPrinters[0]);
+                }
+            }).catch(err => {
+                console.error('Error getting printers async:', err);
+            });
+
+        }
+
 
         // ---------------------------------------------------------------
         // Auto-run availability check on load
