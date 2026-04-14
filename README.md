@@ -94,13 +94,46 @@ Security-related configuration.
 - **RequireHttps**: Determines whether HTTPS is required.
   - false → HTTPS is not required.
 
+## Printing
+
+First up is printing support. The WebView2 control does not have built in printing support, but it does have the WebResourceRequested event which can be used to intercept requests to a local REST API and implement printing that way. This approach has several advantages:
+
+- **No real network server required.** Requests are intercepted inside the WebView2 process boundary before they reach the network stack. No TCP port is bound, so there are no firewall rules to configure, no port-conflict risk, and no elevated permissions needed.
+
+- **MSIX sandbox compatible.** A real localhost HTTP listener would require the `privateNetworkClientServer` capability and a loopback exemption. Because `WebResourceRequested` never opens a socket, the packaged app sandbox imposes no extra restrictions.
+
+- **Isolated to this browser instance.** A genuine HTTP server is reachable by any process on the machine. The `WebResourceRequested` handler only fires for the specific `CoreWebView2` instance that registered the filter, so no other application can call the print API.
+
+- **Standard `fetch()` on the client side.** The web page calls the API exactly as it would call any REST endpoint — no custom JavaScript bridge, no `window.chrome.webview.postMessage`, no Electron-specific IPC. This makes web apps straightforward to develop and test in a regular browser before deploying inside Crumbs.
+
+- **Electron print API compatibility.** The endpoint signatures mirror Electron's `webContents.print()` and `webContents.printToPDF()` options, so web apps already written against Electron's printing model can be adapted with minimal changes.
+
+- **Full `CoreWebView2PrintAsync` control.** `window.print()` always shows the system print dialog. Going through the REST API gives access to the full WebView2 silent-print path with per-job settings: printer selection, copies, duplex, colour mode, page ranges, margins, scale, and more.
+
+- **Non-blocking by design.** Print jobs return `202 Accepted` immediately. The page can poll for status or fire-and-forget, keeping the UI responsive during long spooling operations.
+
 
 ## Where to next
+
+- complete support for electron API: https://www.electronjs.org/docs/latest/api/web-contents
+    - Implement support for electron printToPDF 
+
+- review suport for this:
+
+```javascript
+    win.webContents.on('did-finish-load', () => {
+        win.webContents.print(options, (success, failureReason) => {
+            if (!success) console.log(failureReason);
+            console.log('Print Initiated');
+        });
+    });
+```
+
 
 You already confirmed earlier that WebResourceRequested works for http://127.0.0.1:41190. This API is a natural REST API:
 
 ```
-POST   /print/current              → 202 { "jobId": "j1" }   (print current HTML)
+POST   /print/html/view            → 202 { "jobId": "j1" }   (print current HTML)
 POST   /print/html/document        → 202 { "jobId": "j2" }   (body: { url, printerName, ... })
 POST   /print/html/string          → 202 { "jobId": "j3" }   (body: { html, printerName, ... })
 POST   /print/pdf                  → 202 { "jobId": "j4" }   (body: { url, printerName, ... })

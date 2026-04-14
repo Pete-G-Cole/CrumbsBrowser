@@ -172,25 +172,62 @@ json PrintApiRouter::HandleGetPrinterByName(std::string const& name)
     throw HttpNotFoundException("Printer not found: " + name);
 }
 
+// Note: This handler initiates a print operation but does not wait for its completion before responding to the client.
+// This design allows the client to remain responsive and handle the print operation's outcome asynchronously, rather than blocking until the print job finishes.
+// see: https://learn.microsoft.com/en-us/microsoft-edge/webview2/how-to/print?tabs=dotnetcsharp
 json PrintApiRouter::HandlePostPrint(json const& options)
 {
     bool silent = options.value("silent", false);
 
-    if (!silent)
-    {
-        // Show the browser print dialog (non-silent mode)
-        m_webView.ShowPrintUI(CoreWebView2PrintDialogKind::Browser);
-    }
-    else
-    {
-        // Silent print to the specified (or default) printer
-        auto settings = BuildPrintSettings(options);
-        auto wv = m_webView;
-        [wv, settings]() -> winrt::fire_and_forget
-            {
-                co_await wv.PrintAsync(settings);
-            }();
-    }
+	{
+		std::lock_guard lock(m_printMutex);
+		if (m_activePrintOperation || m_lastPrintStatus == CoreWebView2PrintStatus::PrinterUnavailable)
+		{
+			// If a print is already in progress or the printer is unavailable or errored, reject new requests
+			// clear the error state ready for next request
+			m_lastPrintStatus = CoreWebView2PrintStatus::Succeeded;
+			throw std::runtime_error("Printer is currently unavailable or busy with another print job.");
+		}
+	}
+
+	if (!silent)
+	{
+		// Show the browser print dialog (non-silent mode)
+		m_webView.ShowPrintUI(CoreWebView2PrintDialogKind::Browser);
+	}
+	else
+	{
+		// Silent print to the specified (or default) printer
+		auto settings = BuildPrintSettings(options);
+		{
+			std::lock_guard lock(m_printMutex);
+			m_activePrintOperation = m_webView.PrintAsync(settings);
+		}
+		m_activePrintOperation.Completed(
+			[this](winrt::Windows::Foundation::IAsyncOperation<CoreWebView2PrintStatus> const& op,
+				   winrt::Windows::Foundation::AsyncStatus asyncStatus)
+			{
+				// NOTE: Once the print operation completes, we store the result status and clear the active operation.
+				// This allows subsequent print requests to proceed, while still providing feedback on the last print attempt's outcome.
+				// A status of OtherError means something went wrong with the print operation that isn't covered by the other status codes (e.g. an exception was thrown).
+				// The client needs to callback to determine what the error was and decide how to proceed (e.g. retry, show error message, etc.)
+				// Compute status before acquiring the lock to keep the critical section minimal.
+				CoreWebView2PrintStatus status;
+				try
+				{
+					status = (asyncStatus == winrt::Windows::Foundation::AsyncStatus::Completed)
+						? op.GetResults()
+						: CoreWebView2PrintStatus::OtherError;
+				}
+				catch (...)
+				{
+					status = CoreWebView2PrintStatus::OtherError;
+				}
+				std::lock_guard lock(m_printMutex);
+				m_lastPrintStatus = status;
+				m_activePrintOperation = nullptr;
+			});
+	}
 
     json j;
     j["status"] = "accepted";
@@ -314,34 +351,187 @@ std::string PrintApiRouter::PrinterStatusToString(DWORD status)
     return "unknown";
 }
 
+PrintApiRouter::PaperSize PrintApiRouter::GetPaperSize(
+    std::string const& printerName,
+    std::string const& paperName)
+{
+    auto wPrinterName = utf8_to_utf16(printerName);
+    auto wPaperName   = utf8_to_utf16(paperName);
+
+    DWORD n = DeviceCapabilitiesW(wPrinterName.c_str(), nullptr, DC_PAPERNAMES, nullptr, nullptr);
+    if (n == (DWORD)-1 || n == 0)
+        throw std::runtime_error("Failed to query paper names for printer: " + printerName);
+
+    // DC_PAPERNAMES: parallel array of null-padded 64-wchar slots.
+    // DC_PAPERSIZE:  parallel array of POINT, dimensions in tenths of a millimetre.
+    std::vector<wchar_t> names(n * 64);
+    std::vector<POINT>   sizes(n);
+    DeviceCapabilitiesW(wPrinterName.c_str(), nullptr, DC_PAPERNAMES, names.data(), nullptr);
+    DeviceCapabilitiesW(wPrinterName.c_str(), nullptr, DC_PAPERSIZE,
+        reinterpret_cast<LPWSTR>(sizes.data()), nullptr);
+
+    for (DWORD i = 0; i < n; ++i)
+    {
+        std::wstring ws(&names[i * 64], 64);
+        auto nulPos = ws.find(L'\0');
+        if (nulPos != std::wstring::npos) ws.resize(nulPos);
+
+        if (_wcsicmp(ws.c_str(), wPaperName.c_str()) == 0)
+        {
+            // Tenths of a millimetre → inches  (1 inch = 25.4 mm = 254 tenths)
+            return { sizes[i].x / 254.0, sizes[i].y / 254.0 };
+        }
+    }
+
+    throw std::runtime_error("Paper size not found: '" + paperName +
+        "' on printer '" + printerName + "'");
+}
+
+std::string PrintApiRouter::ResolvePrinterName(std::string const& printerName)
+{
+    if (!printerName.empty())
+        return printerName;
+
+    DWORD size = 0;
+    GetDefaultPrinterW(nullptr, &size);
+    if (size == 0)
+        throw std::runtime_error("Failed to query default printer name");
+
+    std::vector<wchar_t> buf(size);
+    if (!GetDefaultPrinterW(buf.data(), &size))
+        throw std::runtime_error("Failed to get default printer name: " + std::to_string(GetLastError()));
+
+    return utf16_to_utf8(buf.data());
+}
+
 // ---- Print settings helpers ----------------------------------------
 
 CoreWebView2PrintSettings PrintApiRouter::BuildPrintSettings(json const& options)
 {
-    auto settings = m_webView.Environment().CreatePrintSettings();
+	auto settings = m_webView.Environment().CreatePrintSettings();
 
-    if (options.contains("printerName") && options["printerName"].is_string())
-        settings.PrinterName(winrt::to_hstring(options["printerName"].get<std::string>()));
+	// collate: boolean → CoreWebView2PrintCollation
+	if (options.contains("collate") && options["collate"].is_boolean())
+		settings.Collation(options["collate"].get<bool>()
+			? CoreWebView2PrintCollation::Collated
+			: CoreWebView2PrintCollation::Uncollated);
 
-    if (options.contains("copies") && options["copies"].is_number_integer())
-        settings.Copies(static_cast<int32_t>(options["copies"].get<int>()));
+	// color: boolean → CoreWebView2PrintColorMode
+	if (options.contains("color") && options["color"].is_boolean())
+		settings.ColorMode(options["color"].get<bool>()
+			? CoreWebView2PrintColorMode::Color
+			: CoreWebView2PrintColorMode::Grayscale);
 
-    if (options.contains("duplex") && options["duplex"].is_boolean())
-        settings.Duplex(options["duplex"].get<bool>()
-            ? CoreWebView2PrintDuplex::TwoSidedLongEdge
-            : CoreWebView2PrintDuplex::OneSided);
+	// copies: integer (1–999) → Copies
+	if (options.contains("copies") && options["copies"].is_number_integer())
+		settings.Copies(static_cast<int32_t>(options["copies"].get<int>()));
 
-    if (options.contains("landscape") && options["landscape"].is_boolean())
-        settings.Orientation(options["landscape"].get<bool>()
-            ? CoreWebView2PrintOrientation::Landscape
-            : CoreWebView2PrintOrientation::Portrait);
+	// deviceName: string → PrinterName
+	if (options.contains("deviceName") && options["deviceName"].is_string())
+		settings.PrinterName(winrt::to_hstring(options["deviceName"].get<std::string>()));
 
-    if (options.contains("color") && options["color"].is_boolean())
-        settings.ColorMode(options["color"].get<bool>()
-            ? CoreWebView2PrintColorMode::Color
-            : CoreWebView2PrintColorMode::Grayscale);
+	// dpi: { horizontal, vertical } — no CoreWebView2PrintSettings equivalent
 
-    return settings;
+	// duplexMode: "simplex"|"shortEdge"|"longEdge" → CoreWebView2PrintDuplex
+	if (options.contains("duplexMode") && options["duplexMode"].is_string())
+	{
+		auto const& mode = options["duplexMode"].get<std::string>();
+		if (mode == "longEdge")
+			settings.Duplex(CoreWebView2PrintDuplex::TwoSidedLongEdge);
+		else if (mode == "shortEdge")
+			settings.Duplex(CoreWebView2PrintDuplex::TwoSidedShortEdge);
+		else
+			settings.Duplex(CoreWebView2PrintDuplex::OneSided);
+	}
+
+	// footer: string → FooterUri (note: WebView2 treats this as a URI, not plain text)
+	// header: string → HeaderTitle
+	// Both require ShouldPrintHeaderAndFooter = true to take effect.
+	{
+		bool const hasHeader = options.contains("header") && options["header"].is_string();
+		bool const hasFooter = options.contains("footer") && options["footer"].is_string();
+		if (hasHeader || hasFooter)
+		{
+			settings.ShouldPrintHeaderAndFooter(true);
+			if (hasHeader)
+				settings.HeaderTitle(winrt::to_hstring(options["header"].get<std::string>()));
+			if (hasFooter)
+				settings.FooterUri(winrt::to_hstring(options["footer"].get<std::string>()));
+		}
+	}
+
+	// landscape: boolean → CoreWebView2PrintOrientation
+	if (options.contains("landscape") && options["landscape"].is_boolean())
+		settings.Orientation(options["landscape"].get<bool>()
+			? CoreWebView2PrintOrientation::Landscape
+			: CoreWebView2PrintOrientation::Portrait);
+
+	// margins: { top, bottom, left, right } pixels → MarginTop/Bottom/Left/Right inches (÷96)
+	// marginType ("default"|"none"|"printableArea"|"custom") — no CoreWebView2PrintSettings equivalent
+	if (options.contains("margins") && options["margins"].is_object())
+	{
+		auto const& m   = options["margins"];
+		auto px_to_in   = [](double px) { return px / 96.0; };
+		if (m.contains("top")    && m["top"].is_number())    settings.MarginTop(px_to_in(m["top"].get<double>()));
+		if (m.contains("bottom") && m["bottom"].is_number()) settings.MarginBottom(px_to_in(m["bottom"].get<double>()));
+		if (m.contains("left")   && m["left"].is_number())   settings.MarginLeft(px_to_in(m["left"].get<double>()));
+		if (m.contains("right")  && m["right"].is_number())  settings.MarginRight(px_to_in(m["right"].get<double>()));
+	}
+
+	// pageRanges: [{ from, to }, ...] 0-based → PageRanges string "1-3,5" 1-based
+	if (options.contains("pageRanges") && options["pageRanges"].is_array())
+	{
+		std::string rangeStr;
+		for (auto const& r : options["pageRanges"])
+		{
+			if (!r.is_object()) continue;
+			if (!rangeStr.empty()) rangeStr += ',';
+			int const from = r.value("from", 0) + 1;
+			int const to   = r.value("to",   0) + 1;
+			rangeStr += std::to_string(from);
+			if (to != from)
+				rangeStr += '-' + std::to_string(to);
+		}
+		settings.PageRanges(winrt::to_hstring(rangeStr));
+	}
+
+	// pageSize: named string → MediaSize=Custom + PageWidth/PageHeight (standard inch dimensions)
+	// pageSize: { width, height } micrometers → MediaSize=Custom + PageWidth/PageHeight (÷25400)
+	if (options.contains("pageSize"))
+	{
+		auto const& ps = options["pageSize"];
+		if (ps.is_string())
+		{
+            PaperSize paperSize = GetPaperSize(ResolvePrinterName(options.value("deviceName", "")), ps.get<std::string>());
+            settings.MediaSize(CoreWebView2PrintMediaSize::Custom);
+            settings.PageWidth(paperSize.width);
+            settings.PageHeight(paperSize.height);
+		}
+		else if (ps.is_object() && ps.contains("width") && ps.contains("height"))
+		{
+			settings.MediaSize(CoreWebView2PrintMediaSize::Custom);
+			settings.PageWidth(ps["width"].get<double>()  / 25400.0);
+			settings.PageHeight(ps["height"].get<double>() / 25400.0);
+		}
+	}
+
+	// pagesPerSheet: integer (1,2,4,6,9,16) → PagesPerSide
+	if (options.contains("pagesPerSheet") && options["pagesPerSheet"].is_number_integer())
+		settings.PagesPerSide(static_cast<int32_t>(options["pagesPerSheet"].get<int>()));
+
+	// printBackground: boolean → ShouldPrintBackgrounds
+	if (options.contains("printBackground") && options["printBackground"].is_boolean())
+		settings.ShouldPrintBackgrounds(options["printBackground"].get<bool>());
+
+	// scaleFactor: number (0–200, percentage) → ScaleFactor (0.1–2.0, i.e. ÷100)
+	if (options.contains("scaleFactor") && options["scaleFactor"].is_number())
+		settings.ScaleFactor(options["scaleFactor"].get<double>() / 100.0);
+
+	// silent: boolean — handled by the caller (HandlePostPrint), not a settings field
+
+	// ShouldPrintSelectionOnly — no Electron equivalent
+
+	return settings;
 }
 
 // ---------------------------------------------------------------------------

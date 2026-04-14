@@ -98,7 +98,7 @@
 
     /**
      * Returns detail for a single printer including its capabilities.
-     * Useful addition - not implemented in Electron's webContents.*
+     * Useful addition - *NOT* implemented in Electron's webContents.*
      *
      * @param {string} name  Printer name as returned by getPrintersAsync().
      * @returns {Promise<object>}
@@ -118,6 +118,9 @@
      * When silent is false (the default) the browser print dialog is shown.
      * When silent is true the page is sent directly to the specified printer.
      *
+     * All options are optional and have defaults as per Electron's API where applicable.
+     * Note that some options may not be supported by all printers or may be overridden by the printer's default settings.
+     * 
      * @param {object}   [options]
      * @param {boolean}  [options.silent=false]           Print without showing a dialog.
      * @param {boolean}  [options.printBackground=false]  Print CSS background graphics.
@@ -131,14 +134,18 @@
      * @param {number}   [options.margins.right]          Right margin in microns (custom only).
      * @param {boolean}  [options.landscape=false]        Landscape orientation.
      * @param {number}   [options.scaleFactor=100]        Scale factor as a percentage (10–200).
+     * @param {number}   [options.pagesPerSheet=1]        Number of pages per sheet.
      * @param {boolean}  [options.collate=false]          Collate copies.
      * @param {number}   [options.copies=1]               Number of copies.
-     * @param {string}   [options.pageRanges='']          Page ranges e.g. "1-5, 8, 11-13".
+     * @param {object}   [options.pageRanges[]]           Array of page ranges, e.g. pageRanges: [{from: 0,to: 1}]
+     * @param {number}   [options.pageRanges.from]        Starting page number (0-based).
+     * @param {number}   [options.pageRanges.to]          Ending page number (0-based). 
      * @param {string}   [options.duplexMode='simplex']   'simplex'|'shortEdge'|'longEdge'.
      * @param {string}   [options.header='']              Page header text.
      * @param {string}   [options.footer='']              Page footer text.
      * @param {string|{width:number,height:number}} [options.pageSize='A4']
      *                                                    Named size or {width,height} in microns.
+     * @param {boolean}  [options.usePrinterDefaultPageSize=false]  Whether to use the printer's default page size.]
      * @param {function(success:boolean, failureReason:string)} [callback]
      *   Optional callback for Electron API compatibility.
      * @returns {Promise<{status: string}>}
