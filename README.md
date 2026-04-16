@@ -98,6 +98,8 @@ Security-related configuration.
 
 First up is printing support. The WebView2 control does not have built in printing support, but it does have the WebResourceRequested event which can be used to intercept requests to a local REST API and implement printing that way. This approach has several advantages:
 
+- **No custom JavaScript bridge needed.** The web page can call `fetch('http://127.0.0.1:41190/print/html/view')`. A javascript bridge would require a custom API surface and marshalling code, whereas `fetch()` is universally supported and works out of the box. This can quickly become a maintenance burden as the API evolves, so using standard HTTP verbs and JSON payloads keeps things simple.
+
 - **No real network server required.** Requests are intercepted inside the WebView2 process boundary before they reach the network stack. No TCP port is bound, so there are no firewall rules to configure, no port-conflict risk, and no elevated permissions needed.
 
 - **MSIX sandbox compatible.** A real localhost HTTP listener would require the `privateNetworkClientServer` capability and a loopback exemption. Because `WebResourceRequested` never opens a socket, the packaged app sandbox imposes no extra restrictions.
