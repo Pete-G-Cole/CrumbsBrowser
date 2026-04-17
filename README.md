@@ -118,19 +118,6 @@ First up is printing support. The WebView2 control does not have built in printi
 ## Where to next
 
 - complete support for electron API: https://www.electronjs.org/docs/latest/api/web-contents
-    - Implement support for electron printToPDF 
-
-- review suport for this:
-
-```javascript
-    win.webContents.on('did-finish-load', () => {
-        win.webContents.print(options, (success, failureReason) => {
-            if (!success) console.log(failureReason);
-            console.log('Print Initiated');
-        });
-    });
-```
-
 
 You already confirmed earlier that WebResourceRequested works for http://127.0.0.1:41190. This API is a natural REST API:
 

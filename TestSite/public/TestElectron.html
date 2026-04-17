@@ -315,16 +315,16 @@
 
             const rangesParsed = parsePageRanges(document.getElementById('pdf-ranges').value);
             const options = {
-                pageSize:             document.getElementById('pdf-pagesize').value,
-                landscape:            document.getElementById('pdf-landscape').checked,
-                printBackground:      document.getElementById('pdf-bg').checked,
-                displayHeaderFooter:  document.getElementById('pdf-header').checked,
-                scale:                parseFloat(document.getElementById('pdf-scale').value),
+                pageSize: document.getElementById('pdf-pagesize').value,
+                landscape: document.getElementById('pdf-landscape').checked,
+                printBackground: document.getElementById('pdf-bg').checked,
+                displayHeaderFooter: document.getElementById('pdf-header').checked,
+                scale: parseFloat(document.getElementById('pdf-scale').value),
                 margins: {
-                    top:    parseFloat(document.getElementById('pdf-mt').value),
+                    top: parseFloat(document.getElementById('pdf-mt').value),
                     bottom: parseFloat(document.getElementById('pdf-mb').value),
-                    left:   parseFloat(document.getElementById('pdf-ml').value),
-                    right:  parseFloat(document.getElementById('pdf-mr').value),
+                    left: parseFloat(document.getElementById('pdf-ml').value),
+                    right: parseFloat(document.getElementById('pdf-mr').value),
                 },
             };
             if (rangesParsed) options.pageRanges = rangesParsed;
@@ -332,20 +332,33 @@
             setBadge('pdf-badge', true, 'waiting …');
             showResult('pdf-result', `Sending:\n${JSON.stringify(options, null, 2)}`);
 
-            try {
-                const bytes = await window.webContents.printToPDF(options);
-                const blob  = new Blob([bytes], { type: 'application/pdf' });
-                const url   = URL.createObjectURL(blob);
+            //try {
+            //    const bytes = await window.webContents.printToPDF(options);
+            //    const blob  = new Blob([bytes], { type: 'application/pdf' });
+            //    const url   = URL.createObjectURL(blob);
+            //    prevLink.href = url;
+            //    document.getElementById('pdf-view-btn').disabled = false;
+            //    document.getElementById('pdf-download').style.display = 'flex';
+            //    setBadge('pdf-badge', true, `✓ ${bytes.length.toLocaleString()} bytes`);
+            //    showResult('pdf-result',
+            //        `PDF generated: ${bytes.length.toLocaleString()} bytes\nOptions: ${JSON.stringify(options, null, 2)}`);
+            //} catch (e) {
+            //    setBadge('pdf-badge', false, '✗ Error');
+            //    showResult('pdf-result', `Error: ${e.message}`);
+            //}
+            window.webContents.printToPDF(options).then(data => {
+                const blob = new Blob([data], { type: 'application/pdf' });
+                const url = URL.createObjectURL(blob);
                 prevLink.href = url;
                 document.getElementById('pdf-view-btn').disabled = false;
                 document.getElementById('pdf-download').style.display = 'flex';
-                setBadge('pdf-badge', true, `✓ ${bytes.length.toLocaleString()} bytes`);
+                setBadge('pdf-badge', true, `✓ ${data.length.toLocaleString()} bytes`);
                 showResult('pdf-result',
-                    `PDF generated: ${bytes.length.toLocaleString()} bytes\nOptions: ${JSON.stringify(options, null, 2)}`);
-            } catch (e) {
+                    `PDF generated: ${data.length.toLocaleString()} bytes\nOptions: ${JSON.stringify(options, null, 2)}`);
+            }).catch(e => {
                 setBadge('pdf-badge', false, '✗ Error');
                 showResult('pdf-result', `Error: ${e.message}`);
-            }
+            });
         }
 
         // ---------------------------------------------------------------
@@ -432,7 +445,7 @@
 
                 const defaultPrinters = printers?.filter((p) => p.isDefault);
                 if (printers.length > 0) {
-                    console.log("Default: ",defaultPrinters[0]);
+                    console.log("Default: ", defaultPrinters[0]);
                 }
             }).catch(err => {
                 console.error('Error getting printers async:', err);
