@@ -88,13 +88,18 @@ void PrintApiRouter::OnWebResourceRequested(
         }
 
 		if (method == "POST")
-        {
-            if (segments.size() == 1 && segments[0] == "print")
-            {
-                SendJsonResponse(args, 202, "Accepted", HandlePostPrint(ReadRequestBodyJson(args)));
-                return;
-            }
-        }
+		{
+			if (segments.size() == 1 && segments[0] == "print")
+			{
+				SendJsonResponse(args, 202, "Accepted", HandlePostPrint(ReadRequestBodyJson(args)));
+				return;
+			}
+			if (segments.size() == 1 && segments[0] == "print-to-pdf")
+			{
+				HandlePostPrintToPdf(args, ReadRequestBodyJson(args));
+				return;
+			}
+		}
 
         SendErrorResponse(args, 404, "Not Found");
     }
@@ -122,6 +127,7 @@ void PrintApiRouter::OnWebResourceRequested(
 //   GET  /printers          Enumerate available printers.
 //   GET  /printers/{name}   Retrieve detail for a named printer.
 //   POST /print             Print the current page (silent or via dialog).
+//   POST /print-to-pdf      Render the current page to PDF; returns application/pdf binary.
 // ===========================================================================
 
 json PrintApiRouter::HandleGetPrinters()
@@ -232,6 +238,72 @@ json PrintApiRouter::HandlePostPrint(json const& options)
     json j;
     j["status"] = "accepted";
     return j;
+}
+
+void PrintApiRouter::HandlePostPrintToPdf(
+    CoreWebView2WebResourceRequestedEventArgs const& args,
+    json const& options)
+{
+    // Take a deferral so WebView2 keeps the response slot open until the async PDF
+    // operation completes and we have called deferral.Complete().
+    auto deferral = args.GetDeferral();
+
+    try
+    {
+        // BuildPdfSettings and PrintToPdfStreamAsync must be called on the STA thread.
+        // We start the operation here without blocking, then attach a .Completed() handler
+        // that fires on a background/MTA thread — keeping the STA message pump free so
+        // WebView2 can deliver the operation's completion IPC.
+        auto settings = BuildPdfSettings(options);
+        auto printOp  = m_webView.PrintToPdfStreamAsync(settings);
+
+        printOp.Completed(
+            [this, args, deferral](
+                winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Storage::Streams::IRandomAccessStream> const& op,
+                winrt::Windows::Foundation::AsyncStatus asyncStatus) mutable
+            {
+                // This callback fires on a background thread — safe to block here.
+                try
+                {
+                    if (asyncStatus != winrt::Windows::Foundation::AsyncStatus::Completed)
+                        throw std::runtime_error("PrintToPdfStreamAsync did not complete successfully");
+
+                    auto stream = op.GetResults();
+                    auto size   = static_cast<uint32_t>(stream.Size());
+                    stream.Seek(0);
+
+                    DataReader reader(stream);
+                    // LoadAsync is agile but we are already off the STA, so dispatching
+                    // to a further background thread is still the safest pattern.
+                    std::async(std::launch::async, [loadOp = reader.LoadAsync(size)]() { loadOp.get(); }).get();
+
+                    std::vector<uint8_t> pdfBytes(size);
+                    reader.ReadBytes(pdfBytes);
+
+                    SendBinaryResponse(args, 200, "OK", pdfBytes, "application/pdf");
+                }
+                catch (winrt::hresult_error const& e)
+                {
+                    SendErrorResponse(args, 500, winrt::to_string(e.message()));
+                }
+                catch (std::exception const& e)
+                {
+                    SendErrorResponse(args, 500, e.what());
+                }
+                catch (...)
+                {
+                    SendErrorResponse(args, 500, "Unknown error during PDF generation");
+                }
+
+                deferral.Complete();
+            });
+    }
+    catch (std::exception const& e)
+    {
+        // Construction of settings or the async operation itself failed on the STA thread.
+        SendErrorResponse(args, 500, e.what());
+        deferral.Complete();
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -534,8 +606,102 @@ CoreWebView2PrintSettings PrintApiRouter::BuildPrintSettings(json const& options
 	return settings;
 }
 
+// Maps Electron's printToPDF() options to CoreWebView2PrintSettings.
+// Key differences from BuildPrintSettings:
+//   - scale: 0.1–2.0 direct (not a percentage)
+//   - margins: inches (not pixels)
+//   - displayHeaderFooter + headerTemplate/footerTemplate instead of header/footer
+//   - no printer-specific options (copies, duplex, collate, pagesPerSheet, deviceName)
+CoreWebView2PrintSettings PrintApiRouter::BuildPdfSettings(json const& options)
+{
+	auto settings = m_webView.Environment().CreatePrintSettings();
+
+	// color: boolean → CoreWebView2PrintColorMode
+	if (options.contains("color") && options["color"].is_boolean())
+		settings.ColorMode(options["color"].get<bool>()
+			? CoreWebView2PrintColorMode::Color
+			: CoreWebView2PrintColorMode::Grayscale);
+
+	// landscape: boolean → CoreWebView2PrintOrientation
+	if (options.contains("landscape") && options["landscape"].is_boolean())
+		settings.Orientation(options["landscape"].get<bool>()
+			? CoreWebView2PrintOrientation::Landscape
+			: CoreWebView2PrintOrientation::Portrait);
+
+	// printBackground: boolean → ShouldPrintBackgrounds
+	if (options.contains("printBackground") && options["printBackground"].is_boolean())
+		settings.ShouldPrintBackgrounds(options["printBackground"].get<bool>());
+
+	// scale: number 0.1–2.0 → ScaleFactor (direct, no conversion; contrast with print()'s scaleFactor÷100)
+	if (options.contains("scale") && options["scale"].is_number())
+		settings.ScaleFactor(options["scale"].get<double>());
+
+	// margins: top/bottom/left/right in inches (Electron printToPDF convention)
+	if (options.contains("margins") && options["margins"].is_object())
+	{
+		auto const& m = options["margins"];
+		if (m.contains("top")    && m["top"].is_number())    settings.MarginTop(m["top"].get<double>());
+		if (m.contains("bottom") && m["bottom"].is_number()) settings.MarginBottom(m["bottom"].get<double>());
+		if (m.contains("left")   && m["left"].is_number())   settings.MarginLeft(m["left"].get<double>());
+		if (m.contains("right")  && m["right"].is_number())  settings.MarginRight(m["right"].get<double>());
+	}
+
+	// pageRanges: [{ from, to }, ...] 0-based → PageRanges string "1-3,5" 1-based
+	if (options.contains("pageRanges") && options["pageRanges"].is_array())
+	{
+		std::string rangeStr;
+		for (auto const& r : options["pageRanges"])
+		{
+			if (!r.is_object()) continue;
+			if (!rangeStr.empty()) rangeStr += ',';
+			int const from = r.value("from", 0) + 1;
+			int const to   = r.value("to",   0) + 1;
+			rangeStr += std::to_string(from);
+			if (to != from)
+				rangeStr += '-' + std::to_string(to);
+		}
+		settings.PageRanges(winrt::to_hstring(rangeStr));
+	}
+
+	// pageSize: named string (looked up via default printer) or { width, height } in micrometres
+	if (options.contains("pageSize"))
+	{
+		auto const& ps = options["pageSize"];
+		if (ps.is_string())
+		{
+			PaperSize paperSize = GetPaperSize(ResolvePrinterName(""), ps.get<std::string>());
+			settings.MediaSize(CoreWebView2PrintMediaSize::Custom);
+			settings.PageWidth(paperSize.width);
+			settings.PageHeight(paperSize.height);
+		}
+		else if (ps.is_object() && ps.contains("width") && ps.contains("height"))
+		{
+			settings.MediaSize(CoreWebView2PrintMediaSize::Custom);
+			settings.PageWidth(ps["width"].get<double>()  / 25400.0);
+			settings.PageHeight(ps["height"].get<double>() / 25400.0);
+		}
+	}
+
+	// displayHeaderFooter + headerTemplate / footerTemplate
+	{
+		bool const hasHeader = options.contains("headerTemplate") && options["headerTemplate"].is_string();
+		bool const hasFooter = options.contains("footerTemplate") && options["footerTemplate"].is_string();
+		bool const display   = options.value("displayHeaderFooter", false);
+		if (display || hasHeader || hasFooter)
+		{
+			settings.ShouldPrintHeaderAndFooter(true);
+			if (hasHeader)
+				settings.HeaderTitle(winrt::to_hstring(options["headerTemplate"].get<std::string>()));
+			if (hasFooter)
+				settings.FooterUri(winrt::to_hstring(options["footerTemplate"].get<std::string>()));
+		}
+	}
+
+	return settings;
+}
+
 // ---------------------------------------------------------------------------
-// ---- Request helpers -----------------------------------------------
+// Request helpers
 // ---------------------------------------------------------------------------
 
 json PrintApiRouter::ReadRequestBodyJson(
@@ -620,6 +786,34 @@ void PrintApiRouter::SendCorsPreflightResponse(
         L"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
         L"Access-Control-Allow-Headers: Content-Type\r\n"
         L"Access-Control-Max-Age: 86400");
+
+    args.Response(response);
+}
+
+void PrintApiRouter::SendBinaryResponse(
+    CoreWebView2WebResourceRequestedEventArgs const& args,
+    int statusCode,
+    std::string const& statusText,
+    std::vector<uint8_t> const& data,
+    std::string const& contentType)
+{
+    auto stream = InMemoryRandomAccessStream();
+    auto writer = DataWriter(stream);
+    writer.WriteBytes(winrt::array_view<uint8_t const>(data.data(), static_cast<uint32_t>(data.size())));
+    // StoreAsync().get() must not be called on the STA thread directly — dispatch to background thread.
+    std::async(std::launch::async, [storeOp = writer.StoreAsync()]() { storeOp.get(); }).get();
+    writer.DetachStream();
+    stream.Seek(0);
+
+    auto headers = winrt::to_hstring(
+        "Content-Type: " + contentType + "\r\n"
+        "Content-Length: " + std::to_string(data.size()) + "\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
+        "Access-Control-Allow-Headers: Content-Type");
+
+    auto response = m_webView.Environment().CreateWebResourceResponse(
+        stream, statusCode, winrt::to_hstring(statusText), headers);
 
     args.Response(response);
 }

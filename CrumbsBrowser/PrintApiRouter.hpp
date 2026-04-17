@@ -64,6 +64,9 @@ private:
     nlohmann::json HandleGetPrinters();
     nlohmann::json HandleGetPrinterByName(std::string const& name);
     nlohmann::json HandlePostPrint(nlohmann::json const& options);
+    void           HandlePostPrintToPdf(
+        winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args,
+        nlohmann::json const& options);
 
     // ---- Request helpers -----------------------------------------------
     nlohmann::json ReadRequestBodyJson(winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args);
@@ -83,8 +86,16 @@ private:
     void SendCorsPreflightResponse(
         winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args);
 
+    void SendBinaryResponse(
+        winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args,
+        int statusCode,
+        std::string const& statusText,
+        std::vector<uint8_t> const& data,
+        std::string const& contentType);
+
     // ---- Print settings helpers ----------------------------------------
     winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintSettings BuildPrintSettings(nlohmann::json const& options);
+    winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintSettings BuildPdfSettings(nlohmann::json const& options);
 
     // ---- Printer helpers -----------------------------------------------
     static nlohmann::json PrinterInfoToJson(PRINTER_INFO_2W const& info, bool includeCapabilities);

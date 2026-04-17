@@ -165,13 +165,50 @@
                 throw new Error(`print failed: ${msg}`);
             }
             const result = await res.json();
-            if (callback) callback(true, '');
-            return result;
-        } catch (e) {
-            if (callback) callback(false, e.message);
-            throw e;
-        }
-    }
+                if (callback) callback(true, '');
+                    return result;
+                } catch (e) {
+                    if (callback) callback(false, e.message);
+                    throw e;
+                }
+            }
+
+            /**
+             * Renders the current page to PDF and returns the raw bytes.
+             * Equivalent to Electron's webContents.printToPDF(options).
+             *
+             * @param {object}  [options]
+             * @param {boolean} [options.landscape=false]                Landscape orientation.
+             * @param {boolean} [options.displayHeaderFooter=false]      Show header and footer.
+             * @param {string}  [options.headerTemplate='']              Header text (WebView2: title only).
+             * @param {string}  [options.footerTemplate='']              Footer URI (WebView2: URI only).
+             * @param {boolean} [options.printBackground=false]          Print CSS background graphics.
+             * @param {boolean} [options.color=true]                     Print in colour.
+             * @param {number}  [options.scale=1]                        Scale factor (0.1–2.0).
+             * @param {string|{width:number,height:number}} [options.pageSize='A4']
+             *                                                           Named size or {width,height} in microns.
+             * @param {object}  [options.margins]                        Margin settings (all in inches).
+             * @param {number}  [options.margins.top]
+             * @param {number}  [options.margins.bottom]
+             * @param {number}  [options.margins.left]
+             * @param {number}  [options.margins.right]
+             * @param {Array<{from:number,to:number}>} [options.pageRanges]  Page ranges (0-based).
+             * @returns {Promise<Uint8Array>}  Raw PDF bytes.
+             */
+            async function printToPDF(options = {}) {
+                await requireAvailable();
+                const res = await fetch(`${apiBase}/print-to-pdf`, {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body:    JSON.stringify(options)
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({ message: res.statusText }));
+                    throw new Error(`printToPDF failed: ${err?.message ?? res.statusText}`);
+                }
+                const arrayBuffer = await res.arrayBuffer();
+                return new Uint8Array(arrayBuffer);
+            }
 
     // -------------------------------------------------------------------------
     // Expose as window.webContents  (as per Electron)
@@ -182,7 +219,8 @@
         getPrintersAsync,
         getPrinters,
         getPrinterByName,
-        print
+        print,
+        printToPDF
     };
 
 }(window));
