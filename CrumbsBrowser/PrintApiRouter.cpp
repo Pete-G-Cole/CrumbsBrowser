@@ -96,7 +96,7 @@ void PrintApiRouter::OnWebResourceRequested(
 			}
 			if (segments.size() == 1 && segments[0] == "print-to-pdf")
 			{
-				HandlePostPrintToPdf(args, ReadRequestBodyJson(args));
+                SendBinaryResponse(args, 200, "OK", HandlePostPrintToPdf(args, ReadRequestBodyJson(args)), "application/pdf");
 				return;
 			}
 		}
@@ -187,7 +187,7 @@ json PrintApiRouter::HandlePostPrint(json const& options)
 
 	{
 		std::lock_guard lock(m_printMutex);
-		if (m_activePrintOperation || m_lastPrintStatus == CoreWebView2PrintStatus::PrinterUnavailable)
+		if (m_activePrintOperation || m_activePdfOperation || m_lastPrintStatus == CoreWebView2PrintStatus::PrinterUnavailable)
 		{
 			// If a print is already in progress or the printer is unavailable or errored, reject new requests
 			// clear the error state ready for next request
@@ -240,10 +240,24 @@ json PrintApiRouter::HandlePostPrint(json const& options)
     return j;
 }
 
-void PrintApiRouter::HandlePostPrintToPdf(
+std::vector<uint8_t> PrintApiRouter::HandlePostPrintToPdf(
     CoreWebView2WebResourceRequestedEventArgs const& args,
     json const& options)
 {
+    std::vector<uint8_t> pdfBytes;
+	std::string errorMessage;
+
+    {
+        std::lock_guard lock(m_printMutex);
+        if (m_activePrintOperation || m_activePdfOperation || m_lastPrintStatus == CoreWebView2PrintStatus::PrinterUnavailable)
+        {
+            // If a print is already in progress or the printer is unavailable or errored, reject new requests
+            // clear the error state ready for next request
+            m_lastPrintStatus = CoreWebView2PrintStatus::Succeeded;
+            throw std::runtime_error("Printer is currently unavailable or busy with another print job.");
+        }
+    }
+
     // Take a deferral so WebView2 keeps the response slot open until the async PDF
     // operation completes and we have called deferral.Complete().
     auto deferral = args.GetDeferral();
@@ -255,10 +269,13 @@ void PrintApiRouter::HandlePostPrintToPdf(
         // that fires on a background/MTA thread — keeping the STA message pump free so
         // WebView2 can deliver the operation's completion IPC.
         auto settings = BuildPdfSettings(options);
-        auto printOp  = m_webView.PrintToPdfStreamAsync(settings);
+        {
+            std::lock_guard lock(m_printMutex);
+            m_activePdfOperation = m_webView.PrintToPdfStreamAsync(settings);
+        }
 
-        printOp.Completed(
-            [this, args, deferral](
+        m_activePdfOperation.Completed(
+            [this, args, deferral,pdfBytes,errorMessage](
                 winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Storage::Streams::IRandomAccessStream> const& op,
                 winrt::Windows::Foundation::AsyncStatus asyncStatus) mutable
             {
@@ -277,33 +294,43 @@ void PrintApiRouter::HandlePostPrintToPdf(
                     // to a further background thread is still the safest pattern.
                     std::async(std::launch::async, [loadOp = reader.LoadAsync(size)]() { loadOp.get(); }).get();
 
-                    std::vector<uint8_t> pdfBytes(size);
+                    pdfBytes = std::vector<uint8_t>(size);
                     reader.ReadBytes(pdfBytes);
 
                     SendBinaryResponse(args, 200, "OK", pdfBytes, "application/pdf");
                 }
                 catch (winrt::hresult_error const& e)
                 {
-                    SendErrorResponse(args, 500, winrt::to_string(e.message()));
+                    errorMessage = winrt::to_string(e.message());
                 }
                 catch (std::exception const& e)
                 {
-                    SendErrorResponse(args, 500, e.what());
+                    errorMessage = e.what();
                 }
                 catch (...)
                 {
-                    SendErrorResponse(args, 500, "Unknown error during PDF generation");
+                    errorMessage = "Unknown error during PDF generation";
                 }
+
+                std::lock_guard lock(m_printMutex);
+                m_lastPrintStatus = errorMessage.empty() ? CoreWebView2PrintStatus::Succeeded : CoreWebView2PrintStatus::OtherError;
+                m_activePdfOperation = nullptr;
 
                 deferral.Complete();
             });
     }
     catch (std::exception const& e)
     {
-        // Construction of settings or the async operation itself failed on the STA thread.
-        SendErrorResponse(args, 500, e.what());
         deferral.Complete();
+        throw e;
     }
+
+	if (pdfBytes.empty() && !errorMessage.empty())
+    {
+		throw std::runtime_error("Failed to generate PDF: " + errorMessage);
+    }
+
+    return pdfBytes;
 }
 
 // ---------------------------------------------------------------------------

@@ -64,7 +64,7 @@ private:
     nlohmann::json HandleGetPrinters();
     nlohmann::json HandleGetPrinterByName(std::string const& name);
     nlohmann::json HandlePostPrint(nlohmann::json const& options);
-    void           HandlePostPrintToPdf(
+    std::vector<uint8_t> HandlePostPrintToPdf(
         winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args,
         nlohmann::json const& options);
 
@@ -114,6 +114,7 @@ private:
     winrt::event_token m_webResourceRequestedToken{};
     std::mutex m_printMutex;
     winrt::Windows::Foundation::IAsyncOperation<winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintStatus> m_activePrintOperation{ nullptr };
+    winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Storage::Streams::IRandomAccessStream> m_activePdfOperation{ nullptr };
     winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintStatus m_lastPrintStatus{ winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintStatus::OtherError };
 };
 
