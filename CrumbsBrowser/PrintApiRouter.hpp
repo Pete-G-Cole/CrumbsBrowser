@@ -63,10 +63,10 @@ private:
     // ---- Route handlers ------------------------------------------------
     nlohmann::json HandleGetPrinters();
     nlohmann::json HandleGetPrinterByName(std::string const& name);
-    nlohmann::json HandlePostPrint(nlohmann::json const& options);
-    std::vector<uint8_t> HandlePostPrintToPdf(
+    nlohmann::json HandlePostPrint(winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintSettings const& settings, bool silent);
+    void HandlePostPrintToPdf(
         winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args,
-        nlohmann::json const& options);
+        winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintSettings const& settings);
 
     // ---- Request helpers -----------------------------------------------
     nlohmann::json ReadRequestBodyJson(winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args);
