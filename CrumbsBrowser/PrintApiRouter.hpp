@@ -108,6 +108,7 @@ private:
     static std::string              ExtractPath(std::string const& url);
     static std::vector<std::string> SplitPath(std::string const& path);
     static std::string              UrlDecode(std::string const& s);
+    static std::string              ExtractQueryParam(std::string const& url, std::string const& name);
 
     // ---- State ---------------------------------------------------------
     winrt::Microsoft::Web::WebView2::Core::CoreWebView2 m_webView{ nullptr };
@@ -116,6 +117,52 @@ private:
     winrt::Windows::Foundation::IAsyncOperation<winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintStatus> m_activePrintOperation{ nullptr };
     winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Storage::Streams::IRandomAccessStream> m_activePdfOperation{ nullptr };
     winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintStatus m_lastPrintStatus{ winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintStatus::OtherError };
+
+    // ---- ScriptX.Services emulation route handlers ---------------------
+    // Routes: GET /api, GET|POST /api/v1/licensing[/ping],
+    //         GET /api/v1/printHtml/settings
+    //         GET /api/v1/printHtml/deviceinfo/{device}/{units}
+    //         GET /api/v1/printHtml/htmlPrintDefaults/{units}
+    //         POST /api/v1/printHtml/print
+    //         GET /api/v1/printHtml/status/{jobToken}
+    //         PUT /api/v1/printHtml/canceljob/{jobToken}
+    //         GET /api/v1/printHtml/download/{jobToken}
+    //         POST /api/v1/printPdf/print
+    //         GET /api/v1/printPdf/status/{jobToken}
+    nlohmann::json EmulateSXHandleGetServiceDescription();
+    nlohmann::json EmulateSXHandleGetLicensingPing();
+    nlohmann::json EmulateSXHandleGetLicensing();
+    nlohmann::json EmulateSXHandleGetHtmlPrintSettings();
+    nlohmann::json EmulateSXHandleGetDeviceInfo(std::string const& deviceName, int units);
+    nlohmann::json EmulateSXHandleGetHtmlPrintDefaults(int units);
+    void           EmulateSXHandlePostPrintHtml(
+                       winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args,
+                       nlohmann::json const& body);
+    nlohmann::json EmulateSXHandleGetJobStatus(std::string const& jobToken);
+    void           EmulateSXHandleGetDownload(
+                       winrt::Microsoft::Web::WebView2::Core::CoreWebView2WebResourceRequestedEventArgs const& args,
+                       std::string const& jobToken);
+    nlohmann::json EmulateSXHandleCancelJob(std::string const& jobToken);
+
+    // ---- ScriptX.Services settings builders ----------------------------
+    winrt::Microsoft::Web::WebView2::Core::CoreWebView2PrintSettings EmulateSXBuildPrintSettings(
+        nlohmann::json const& htmlSettings,
+        nlohmann::json const& deviceSettings);
+    nlohmann::json EmulateSXDeviceSettingsToJson(std::string const& printerName, int units);
+    nlohmann::json EmulateSXHtmlPrintSettingsToJson();
+
+    // ---- ScriptX.Services job helpers ----------------------------------
+    static std::string EmulateSXGenerateJobToken();
+    static double      EmulateSXParseMargin(std::string const& value, int units);
+
+    // ScriptX.Services emulation job store
+    // jobToken → completed PDF bytes (present once download is ready)
+    std::map<std::string, std::vector<uint8_t>> m_sxPendingDownloads;
+    // jobToken → JobStatus int code (see Swagger: 6=Completed, -1=ItemError, -2=Abandoned, 5=Printing)
+    std::map<std::string, int>                  m_sxJobStatus;
+    std::string                                 m_sxActivePdfJobToken;   // token of any in-flight PDF job
+    std::string                                 m_sxActivePrintJobToken; // token of any in-flight print job
 };
+
 
 } // namespace CrumbsBrowser

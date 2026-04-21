@@ -4,6 +4,8 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/Windows.ApplicationModel.h>
 #include <future>
+#include <random>
+#include <optional>
 
 using json = nlohmann::json;
 
@@ -103,6 +105,119 @@ void PrintApiRouter::OnWebResourceRequested(
 			}
 		}
 
+        // ---- ScriptX.Services API emulation (/api and /api/v1/...) --------
+        // GET /api  — service description
+        if (method == "GET" && segments.size() == 1 && segments[0] == "api")
+        {
+            SendJsonResponse(args, 200, "OK", EmulateSXHandleGetServiceDescription());
+            return;
+        }
+
+        // All remaining SX routes require at least /api/v1/<group>/...
+        // segments[0]=="api", segments[1]=="v1"
+        if (segments.size() >= 3 && segments[0] == "api" && segments[1] == "v1")
+        {
+            auto const& group = segments[2];
+
+            // ---- Licensing ------------------------------------------------
+            if (group == "licensing")
+            {
+                if (method == "GET" && segments.size() == 3)
+                {
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetLicensing());
+                    return;
+                }
+                if (method == "GET" && segments.size() == 4 && segments[3] == "ping")
+                {
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetLicensingPing());
+                    return;
+                }
+                if (method == "POST" && segments.size() == 3)
+                {
+                    // POST /api/v1/licensing — install license. We just return the
+                    // existing license stub; actual installation is not applicable.
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetLicensing());
+                    return;
+                }
+            }
+
+            // ---- PrintHtml ------------------------------------------------
+            if (group == "printHtml")
+            {
+                if (method == "GET" && segments.size() == 4 && segments[3] == "settings")
+                {
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetHtmlPrintSettings());
+                    return;
+                }
+                // GET /api/v1/printHtml/htmlPrintDefaults/{units}
+                if (method == "GET" && segments.size() == 5 && segments[3] == "htmlPrintDefaults")
+                {
+                    int units = 0;
+                    try { units = std::stoi(segments[4]); } catch (...) {}
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetHtmlPrintDefaults(units));
+                    return;
+                }
+                // GET /api/v1/printHtml/htmlPrintDefaults/?units=0  (query-string form)
+                if (method == "GET" && segments.size() == 4 && segments[3] == "htmlPrintDefaults")
+                {
+                    int units = 0;
+                    auto q = ExtractQueryParam(winrt::to_string(args.Request().Uri()), "units");
+                    try { if (!q.empty()) units = std::stoi(q); } catch (...) {}
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetHtmlPrintDefaults(units));
+                    return;
+                }
+                // GET /api/v1/printHtml/deviceinfo/{deviceName}/{units}
+                if (method == "GET" && segments.size() == 6 && segments[3] == "deviceinfo")
+                {
+                    int units = 0;
+                    try { units = std::stoi(segments[5]); } catch (...) {}
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetDeviceInfo(segments[4], units));
+                    return;
+                }
+                if (method == "POST" && segments.size() == 4 && segments[3] == "print")
+                {
+                    EmulateSXHandlePostPrintHtml(args, ReadRequestBodyJson(args));
+                    return;
+                }
+                // GET /api/v1/printHtml/status/{jobToken}
+                if (method == "GET" && segments.size() == 5 && segments[3] == "status")
+                {
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetJobStatus(segments[4]));
+                    return;
+                }
+                // PUT /api/v1/printHtml/canceljob/{jobToken}
+                if (method == "PUT" && segments.size() == 5 && segments[3] == "canceljob")
+                {
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleCancelJob(segments[4]));
+                    return;
+                }
+                // GET /api/v1/printHtml/download/{jobToken}
+                if (method == "GET" && segments.size() == 5 && segments[3] == "download")
+                {
+                    EmulateSXHandleGetDownload(args, segments[4]);
+                    return;
+                }
+            }
+
+            // ---- PrintPdf -------------------------------------------------
+            if (group == "printPdf")
+            {
+                if (method == "POST" && segments.size() == 4 && segments[3] == "print")
+                {
+                    // Printing an external PDF is not supported by WebView2 in this context.
+                    json err;
+                    err["status"]  = 3; // SoftError
+                    err["message"] = "printPdf is not supported by CrumbsBrowser";
+                    SendJsonResponse(args, 200, "OK", err);
+                    return;
+                }
+                if (method == "GET" && segments.size() == 5 && segments[3] == "status")
+                {
+                    SendJsonResponse(args, 200, "OK", EmulateSXHandleGetJobStatus(segments[4]));
+                    return;
+                }
+            }
+        }
         SendErrorResponse(args, 404, "Not Found");
     }
     catch (HttpNotFoundException const& e)
@@ -123,8 +238,7 @@ void PrintApiRouter::OnWebResourceRequested(
 // Print API  —  /ping | /printers/* | /print
 //
 // Provides an Electron-compatible printing interface backed by WebView2.
-// For each new API group add a matching section header and its handlers below.
-//
+// For each new API group add a matching section header and its handlers below//
 //   GET  /ping              Health-check; confirms running in CrumbsBrowser.
 //   GET  /printers          Enumerate available printers.
 //   GET  /printers/{name}   Retrieve detail for a named printer.
@@ -775,7 +889,7 @@ void PrintApiRouter::SendJsonResponse(
         L"Content-Type: application/json\r\n"
         L"Access-Control-Allow-Origin: *\r\n"
         L"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-        L"Access-Control-Allow-Headers: Content-Type");
+        L"Access-Control-Allow-Headers: Content-Type, Authorization, x-meadroid-path");
 
     args.Response(response);
 }
@@ -801,7 +915,7 @@ void PrintApiRouter::SendCorsPreflightResponse(
         L"No Content",
         L"Access-Control-Allow-Origin: *\r\n"
         L"Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-        L"Access-Control-Allow-Headers: Content-Type\r\n"
+        L"Access-Control-Allow-Headers: Content-Type, Authorization, x-meadroid-path\r\n"
         L"Access-Control-Max-Age: 86400");
 
     args.Response(response);
@@ -827,7 +941,7 @@ void PrintApiRouter::SendBinaryResponse(
         "Content-Length: " + std::to_string(data.size()) + "\r\n"
         "Access-Control-Allow-Origin: *\r\n"
         "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n"
-        "Access-Control-Allow-Headers: Content-Type");
+        "Access-Control-Allow-Headers: Content-Type, Authorization, x-meadroid-path");
 
     auto response = m_webView.Environment().CreateWebResourceResponse(
         stream, statusCode, winrt::to_hstring(statusText), headers);
@@ -909,6 +1023,30 @@ std::string PrintApiRouter::UrlDecode(std::string const& s)
     return result;
 }
 
+std::string PrintApiRouter::ExtractQueryParam(std::string const& url, std::string const& name)
+{
+    auto queryStart = url.find('?');
+    if (queryStart == std::string::npos) return {};
+
+    auto fragStart = url.find('#', queryStart);
+    auto query = url.substr(queryStart + 1,
+        fragStart == std::string::npos ? std::string::npos : fragStart - queryStart - 1);
+
+    size_t pos = 0;
+    while (pos < query.size())
+    {
+        auto ampPos = query.find('&', pos);
+        auto pair   = query.substr(pos, ampPos == std::string::npos ? std::string::npos : ampPos - pos);
+        auto eqPos  = pair.find('=');
+        auto key    = eqPos == std::string::npos ? pair : pair.substr(0, eqPos);
+        if (UrlDecode(key) == name)
+            return eqPos == std::string::npos ? std::string{} : UrlDecode(pair.substr(eqPos + 1));
+        if (ampPos == std::string::npos) break;
+        pos = ampPos + 1;
+    }
+    return {};
+}
+
 std::string PrintApiRouter::GetAppVersion()
 {
     try
@@ -925,6 +1063,612 @@ std::string PrintApiRouter::GetAppVersion()
     {
         return "0.0.0.0";  // Fallback if package info unavailable
     }
+}
+
+// ===========================================================================
+// ScriptX.Services API emulation
+//
+//   GET  /api                                        ServiceDescription
+//   GET  /api/v1/licensing[/ping]                   License / LicenseOptions
+//   POST /api/v1/licensing                           License (stub)
+//   GET  /api/v1/printHtml/settings                 HtmlPrintSettings
+//   GET  /api/v1/printHtml/deviceinfo/{dev}/{units} DeviceSettings
+//   GET  /api/v1/printHtml/htmlPrintDefaults/{units} PrintHtmlDefaultSettings
+//   POST /api/v1/printHtml/print                    Print → QueuedToDevice|QueuedToFile
+//   GET  /api/v1/printHtml/status/{token}           JobStatus
+//   PUT  /api/v1/printHtml/canceljob/{token}        JobStatus (cancelled)
+
+
+// ---------------------------------------------------------------------------
+// GET /api  — ServiceDescription
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleGetServiceDescription()
+{
+    // Collect available printer names from the existing helper
+    json printerNames = json::array();
+    try
+    {
+        auto printers = HandleGetPrinters();
+        for (auto const& p : printers)
+            if (p.contains("name")) printerNames.push_back(p["name"]);
+    }
+    catch (...) {}
+
+    // Parse version from GetAppVersion() "major.minor.build.revision"
+    auto vstr = GetAppVersion();
+    int major = 0, minor = 0, build = 0, revision = 0;
+    sscanf_s(vstr.c_str(), "%d.%d.%d.%d", &major, &minor, &build, &revision);
+
+    json ver;
+    ver["major"]    = major;
+    ver["minor"]    = minor;
+    ver["build"]    = build;
+    ver["revision"] = revision;
+
+    json j;
+    j["serviceClass"]      = 3;    // 3 = WindowsPC
+    j["currentAPIVersion"] = "v1";
+    j["serviceVersion"]    = ver;
+    j["serverVersion"]     = ver;
+    j["availablePrinters"] = printerNames;
+    j["printHTML"]         = true;
+    j["printPDF"]          = false; // external PDF not supported
+    j["printDIRECT"]       = false;
+    return j;
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/licensing/ping  — LicenseOptions
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleGetLicensingPing()
+{
+    json j;
+    j["basicHtmlPrinting"]  = true;
+    j["advancedPrinting"]   = true;
+    j["enhancedFormatting"] = true;
+    j["printPdf"]           = false;
+    j["printRaw"]           = false;
+    return j;
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/licensing  — License
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleGetLicensing()
+{
+    json j;
+    j["guid"]            = "00000000-0000-0000-0000-000000000000";
+    j["company"]         = "CrumbsBrowser";
+    j["companyHomePage"] = "";
+    j["revision"]        = 1;
+    j["from"]            = "2000-01-01T00:00:00Z";
+    j["to"]              = "2999-12-31T00:00:00Z";
+    j["options"]         = EmulateSXHandleGetLicensingPing();
+    j["domains"]         = json::array();
+    return j;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers: build JSON representations of settings/device from WebView2 state
+// ---------------------------------------------------------------------------
+
+json PrintApiRouter::EmulateSXHtmlPrintSettingsToJson()
+{
+    // Return conservative defaults matching what WebView2 will use by default.
+    json margins;
+    margins["left"]   = "1.0";
+    margins["top"]    = "1.0";
+    margins["bottom"] = "1.0";
+    margins["right"]  = "1.0";
+
+    json page;
+    page["orientation"] = 0; // Default
+    page["units"]       = 1; // Inches
+    page["margins"]     = margins;
+
+    json j;
+    j["header"]                       = "&D&bPage &p of &P";
+    j["footer"]                       = "";
+    j["headerFooterFont"]             = "Arial 10pt";
+    j["page"]                         = page;
+    j["viewScale"]                    = 100;
+    j["printBackgroundColorsAndImages"] = 0; // Default
+    j["pageRange"]                    = "";
+    j["printingPass"]                 = 0; // All
+    j["jobTitle"]                     = "";
+    return j;
+}
+
+json PrintApiRouter::EmulateSXDeviceSettingsToJson(std::string const& printerName, int units)
+{
+    // Resolve "default" keyword to the actual default printer name
+    std::string resolved;
+    try { resolved = ResolvePrinterName(printerName == "default" ? "" : printerName); }
+    catch (...) { resolved = printerName; }
+
+    json j;
+    j["printerName"]   = resolved;
+    j["copies"]        = 1;
+    j["collate"]       = 0;  // Default
+    j["duplex"]        = 0;  // Default
+    j["units"]         = units;
+
+    // Populate from printer info if available
+    try
+    {
+        auto info = HandleGetPrinterByName(resolved);
+        j["isDefault"]   = info.value("isDefault", false);
+        j["port"]        = info.value("portName", "");
+        j["driverName"]  = info.value("driverName", "");
+
+        if (info.contains("defaults"))
+        {
+            auto const& d = info["defaults"];
+            if (d.contains("copies"))  j["copies"]  = d["copies"];
+            if (d.contains("collate")) j["collate"]  = d["collate"].get<bool>() ? 1 : 2;
+            if (d.contains("duplex"))
+            {
+                auto const& dux = d["duplex"].get<std::string>();
+                j["duplex"] = (dux == "long-edge") ? 2 : (dux == "short-edge") ? 3 : 1;
+            }
+        }
+        if (info.contains("capabilities"))
+        {
+            auto const& caps = info["capabilities"];
+            if (caps.contains("paperSizes") && caps["paperSizes"].is_array() && !caps["paperSizes"].empty())
+                j["paperSizeName"] = caps["paperSizes"][0];
+        }
+    }
+    catch (...) {}
+
+    // Provide a minimal unprintable margins block
+    json unp;
+    unp["left"] = unp["top"] = unp["bottom"] = unp["right"] = "0.0";
+    j["unprintableMargins"] = unp;
+    j["bins"]  = json::array();
+    j["forms"] = json::array();
+
+    return j;
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/printHtml/settings  — HtmlPrintSettings
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleGetHtmlPrintSettings()
+{
+    return EmulateSXHtmlPrintSettingsToJson();
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/printHtml/deviceinfo/{deviceName}/{units}  — DeviceSettings
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleGetDeviceInfo(std::string const& deviceName, int units)
+{
+    return EmulateSXDeviceSettingsToJson(deviceName, units);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/printHtml/htmlPrintDefaults/{units}  — PrintHtmlDefaultSettings
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleGetHtmlPrintDefaults(int units)
+{
+    json printerNames = json::array();
+    try
+    {
+        auto printers = HandleGetPrinters();
+        for (auto const& p : printers)
+            if (p.contains("name")) printerNames.push_back(p["name"]);
+    }
+    catch (...) {}
+
+    json j;
+    j["settings"]          = EmulateSXHtmlPrintSettingsToJson();
+    j["device"]            = EmulateSXDeviceSettingsToJson("default", units);
+    j["availablePrinters"] = printerNames;
+    return j;
+}
+
+// ---------------------------------------------------------------------------
+// EmulateSXBuildPrintSettings
+// Maps HtmlPrintSettings + DevicePrintSettings → CoreWebView2PrintSettings
+// ---------------------------------------------------------------------------
+CoreWebView2PrintSettings PrintApiRouter::EmulateSXBuildPrintSettings(
+    json const& html,
+    json const& device)
+{
+    auto settings = m_webView.Environment().CreatePrintSettings();
+
+    // --- Device settings ---
+
+    // printerName
+    if (device.contains("printerName") && device["printerName"].is_string())
+    {
+        auto const& name = device["printerName"].get<std::string>();
+        if (!name.empty())
+            settings.PrinterName(winrt::to_hstring(name));
+    }
+
+    // copies
+    if (device.contains("copies") && device["copies"].is_number_integer())
+        settings.Copies(static_cast<int32_t>(device["copies"].get<int>()));
+
+    // collate: 0=Default, 1=True, 2=False
+    if (device.contains("collate") && device["collate"].is_number_integer())
+    {
+        int c = device["collate"].get<int>();
+        if (c == 1) settings.Collation(CoreWebView2PrintCollation::Collated);
+        else if (c == 2) settings.Collation(CoreWebView2PrintCollation::Uncollated);
+    }
+
+    // duplex: 0=Default, 1=Simplex, 2=Vertical(LongEdge), 3=Horizontal(ShortEdge)
+    if (device.contains("duplex") && device["duplex"].is_number_integer())
+    {
+        switch (device["duplex"].get<int>())
+        {
+            case 1: settings.Duplex(CoreWebView2PrintDuplex::OneSided);          break;
+            case 2: settings.Duplex(CoreWebView2PrintDuplex::TwoSidedLongEdge);  break;
+            case 3: settings.Duplex(CoreWebView2PrintDuplex::TwoSidedShortEdge); break;
+            default: break;
+        }
+    }
+
+    // paperSizeName — look up dimensions from the printer
+    if (device.contains("paperSizeName") && device["paperSizeName"].is_string())
+    {
+        auto const& szName = device["paperSizeName"].get<std::string>();
+        std::string printerName;
+        if (device.contains("printerName") && device["printerName"].is_string())
+            printerName = device["printerName"].get<std::string>();
+
+        try
+        {
+            auto sz = GetPaperSize(ResolvePrinterName(printerName), szName);
+            settings.MediaSize(CoreWebView2PrintMediaSize::Custom);
+            settings.PageWidth(sz.width);
+            settings.PageHeight(sz.height);
+        }
+        catch (...) { /* fall through — leave at default */ }
+    }
+
+    // --- HtmlPrintSettings ---
+
+    // page.orientation: 0=Default, 1=Landscape, 2=Portrait
+    if (html.contains("page") && html["page"].is_object())
+    {
+        auto const& page = html["page"];
+
+        if (page.contains("orientation") && page["orientation"].is_number_integer())
+        {
+            switch (page["orientation"].get<int>())
+            {
+                case 1: settings.Orientation(CoreWebView2PrintOrientation::Landscape); break;
+                case 2: settings.Orientation(CoreWebView2PrintOrientation::Portrait);  break;
+                default: break;
+            }
+        }
+
+        // margins — parse as the given unit and convert to inches for WebView2
+        if (page.contains("margins") && page["margins"].is_object())
+        {
+            auto const& m   = page["margins"];
+            int units = page.value("units", 1); // 1=inches, 2=mm, 0=default(inches)
+
+            auto marginIn = [&](char const* key) -> std::optional<double>
+            {
+                if (m.contains(key) && m[key].is_string())
+                    return EmulateSXParseMargin(m[key].get<std::string>(), units);
+                return std::nullopt;
+            };
+
+            if (auto v = marginIn("top"))    settings.MarginTop(*v);
+            if (auto v = marginIn("bottom")) settings.MarginBottom(*v);
+            if (auto v = marginIn("left"))   settings.MarginLeft(*v);
+            if (auto v = marginIn("right"))  settings.MarginRight(*v);
+        }
+    }
+
+    // viewScale: integer percentage → ScaleFactor (÷100)
+    if (html.contains("viewScale") && html["viewScale"].is_number_integer())
+    {
+        double scale = html["viewScale"].get<int>() / 100.0;
+        if (scale >= 0.1 && scale <= 2.0)
+            settings.ScaleFactor(scale);
+    }
+
+    // printBackgroundColorsAndImages: 0=Default, 1=True, 2=False
+    if (html.contains("printBackgroundColorsAndImages") && html["printBackgroundColorsAndImages"].is_number_integer())
+    {
+        int bg = html["printBackgroundColorsAndImages"].get<int>();
+        if (bg == 1) settings.ShouldPrintBackgrounds(true);
+        else if (bg == 2) settings.ShouldPrintBackgrounds(false);
+    }
+
+    // pageRange: already 1-based string e.g. "1-3,5" — pass directly
+    if (html.contains("pageRange") && html["pageRange"].is_string())
+    {
+        auto const& pr = html["pageRange"].get<std::string>();
+        if (!pr.empty())
+            settings.PageRanges(winrt::to_hstring(pr));
+    }
+
+    // header / footer
+    {
+        bool const hasHeader = html.contains("header") && html["header"].is_string() && !html["header"].get<std::string>().empty();
+        bool const hasFooter = html.contains("footer") && html["footer"].is_string() && !html["footer"].get<std::string>().empty();
+        if (hasHeader || hasFooter)
+        {
+            settings.ShouldPrintHeaderAndFooter(true);
+            if (hasHeader) settings.HeaderTitle(winrt::to_hstring(html["header"].get<std::string>()));
+            if (hasFooter) settings.FooterUri(winrt::to_hstring(html["footer"].get<std::string>()));
+        }
+    }
+
+    return settings;
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/printHtml/status/{jobToken}  — JobStatus
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleGetJobStatus(std::string const& jobToken)
+{
+    json j;
+    j["jobIdentifier"] = jobToken;
+
+    std::lock_guard lock(m_printMutex);
+
+    // Check if there is a completed download waiting
+    if (m_sxPendingDownloads.count(jobToken))
+    {
+        j["status"]  = 102; // CompletedWaitingForCollection
+        j["message"] = "PDF ready for download";
+        return j;
+    }
+
+    // Check explicit status map
+    if (m_sxJobStatus.count(jobToken))
+    {
+        j["status"]  = m_sxJobStatus.at(jobToken);
+        j["message"] = "";
+        return j;
+    }
+
+    // Active jobs
+    if (m_sxActivePdfJobToken == jobToken)
+    {
+        j["status"]  = 5; // Printing (PDF)
+        j["message"] = "Generating PDF";
+        return j;
+    }
+    if (m_sxActivePrintJobToken == jobToken)
+    {
+        j["status"]  = 5; // Printing
+        j["message"] = "Printing";
+        return j;
+    }
+
+    j["status"]  = -1; // ItemError — unknown token
+    j["message"] = "Unknown job token";
+    return j;
+}
+
+// ---------------------------------------------------------------------------
+// PUT /api/v1/printHtml/canceljob/{jobToken}  — JobStatus
+// ---------------------------------------------------------------------------
+json PrintApiRouter::EmulateSXHandleCancelJob(std::string const& jobToken)
+{
+    {
+        std::lock_guard lock(m_printMutex);
+
+        if (m_sxActivePdfJobToken == jobToken && m_activePdfOperation)
+        {
+            m_activePdfOperation.Cancel();
+            m_sxActivePdfJobToken.clear();
+            m_sxJobStatus[jobToken] = -2; // Abandoned
+        }
+        else if (m_sxActivePrintJobToken == jobToken && m_activePrintOperation)
+        {
+            m_activePrintOperation.Cancel();
+            m_sxActivePrintJobToken.clear();
+            m_sxJobStatus[jobToken] = -2; // Abandoned
+        }
+        else if (m_sxJobStatus.count(jobToken))
+        {
+            m_sxJobStatus[jobToken] = -2; // Abandoned
+        }
+        // Remove any pending download for this token
+        m_sxPendingDownloads.erase(jobToken);
+    }
+
+    return EmulateSXHandleGetJobStatus(jobToken);
+}
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/printHtml/download/{jobToken}  — binary PDF
+// ---------------------------------------------------------------------------
+void PrintApiRouter::EmulateSXHandleGetDownload(
+    CoreWebView2WebResourceRequestedEventArgs const& args,
+    std::string const& jobToken)
+{
+    std::vector<uint8_t> bytes;
+    {
+        std::lock_guard lock(m_printMutex);
+        auto it = m_sxPendingDownloads.find(jobToken);
+        if (it == m_sxPendingDownloads.end())
+        {
+            SendErrorResponse(args, 404, "No download available for job: " + jobToken);
+            return;
+        }
+        bytes = std::move(it->second);
+        m_sxPendingDownloads.erase(it);
+        m_sxJobStatus[jobToken] = 100; // Collected
+    }
+    SendBinaryResponse(args, 200, "OK", bytes, "application/pdf");
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/v1/printHtml/print  — PrintHtmlDescription → Print response
+//
+// contentType: 1=Url (not supported here — we print the current page)
+//              2=Html, 4=InnerHtml, 8=String (all treated as current page)
+// device.printToFileName set → PrintToPdfStreamAsync (QueuedToFile=2)
+// device.printToFileName absent → PrintAsync silent (QueuedToDevice=1)
+// ---------------------------------------------------------------------------
+void PrintApiRouter::EmulateSXHandlePostPrintHtml(
+    CoreWebView2WebResourceRequestedEventArgs const& args,
+    json const& body)
+{
+    // Guard against concurrent operations
+    {
+        std::lock_guard lock(m_printMutex);
+        if (m_activePrintOperation || m_activePdfOperation)
+        {
+            json err;
+            err["status"]  = 3; // SoftError
+            err["message"] = "A print operation is already in progress";
+            SendJsonResponse(args, 200, "OK", err);
+            return;
+        }
+    }
+
+    json const& htmlSettings   = body.contains("settings") ? body["settings"] : json::object();
+    json const& deviceSettings = body.contains("device")   ? body["device"]   : json::object();
+
+    bool const printToFile = deviceSettings.contains("printToFileName")
+        && deviceSettings["printToFileName"].is_string()
+        && !deviceSettings["printToFileName"].get<std::string>().empty();
+
+    auto settings = EmulateSXBuildPrintSettings(htmlSettings, deviceSettings);
+    auto jobToken = EmulateSXGenerateJobToken();
+
+    if (printToFile)
+    {
+        // --- PDF output path (QueuedToFile) ---
+        auto deferral = args.GetDeferral();
+        {
+            std::lock_guard lock(m_printMutex);
+            m_activePdfOperation      = m_webView.PrintToPdfStreamAsync(settings);
+            m_sxActivePdfJobToken     = jobToken;
+            m_sxJobStatus[jobToken]   = 5; // Printing
+        }
+
+        m_activePdfOperation.Completed(
+            [this, args, deferral, jobToken](
+                winrt::Windows::Foundation::IAsyncOperation<winrt::Windows::Storage::Streams::IRandomAccessStream> const& op,
+                winrt::Windows::Foundation::AsyncStatus asyncStatus) mutable
+            {
+                try
+                {
+                    if (asyncStatus != winrt::Windows::Foundation::AsyncStatus::Completed)
+                        throw std::runtime_error("PrintToPdfStreamAsync cancelled or failed");
+
+                    auto stream = op.GetResults();
+                    auto size   = static_cast<uint32_t>(stream.Size());
+                    stream.Seek(0);
+
+                    DataReader reader(stream);
+                    std::async(std::launch::async, [loadOp = reader.LoadAsync(size)]() { loadOp.get(); }).get();
+
+                    std::vector<uint8_t> pdfBytes(size);
+                    reader.ReadBytes(pdfBytes);
+
+                    {
+                        std::lock_guard lock(m_printMutex);
+                        m_sxPendingDownloads[jobToken] = std::move(pdfBytes);
+                        m_sxJobStatus[jobToken]        = 102; // CompletedWaitingForCollection
+                        m_sxActivePdfJobToken.clear();
+                        m_activePdfOperation = nullptr;
+                    }
+
+                    // Respond with QueuedToFile — client polls status then calls download
+                    json resp;
+                    resp["status"]        = 2; // QueuedToFile
+                    resp["jobIdentifier"] = jobToken;
+                    resp["message"]       = "";
+                    SendJsonResponse(args, 200, "OK", resp);
+                }
+                catch (std::exception const& e)
+                {
+                    {
+                        std::lock_guard lock(m_printMutex);
+                        m_sxJobStatus[jobToken] = -1; // ItemError
+                        m_sxActivePdfJobToken.clear();
+                        m_activePdfOperation = nullptr;
+                    }
+                    SendErrorResponse(args, 500, e.what());
+                }
+                catch (...)
+                {
+                    {
+                        std::lock_guard lock(m_printMutex);
+                        m_sxJobStatus[jobToken] = -1;
+                        m_sxActivePdfJobToken.clear();
+                        m_activePdfOperation = nullptr;
+                    }
+                    SendErrorResponse(args, 500, "Unknown error during PDF generation");
+                }
+                deferral.Complete();
+            });
+    }
+    else
+    {
+        // --- Device print path (QueuedToDevice) ---
+        {
+            std::lock_guard lock(m_printMutex);
+            m_activePrintOperation      = m_webView.PrintAsync(settings);
+            m_sxActivePrintJobToken     = jobToken;
+            m_sxJobStatus[jobToken]     = 5; // Printing
+        }
+
+        m_activePrintOperation.Completed(
+            [this, jobToken](
+                winrt::Windows::Foundation::IAsyncOperation<CoreWebView2PrintStatus> const& op,
+                winrt::Windows::Foundation::AsyncStatus asyncStatus)
+            {
+                CoreWebView2PrintStatus printStatus;
+                try
+                {
+                    printStatus = (asyncStatus == winrt::Windows::Foundation::AsyncStatus::Completed)
+                        ? op.GetResults()
+                        : CoreWebView2PrintStatus::OtherError;
+                }
+                catch (...) { printStatus = CoreWebView2PrintStatus::OtherError; }
+
+                std::lock_guard lock(m_printMutex);
+                m_lastPrintStatus = printStatus;
+                m_sxJobStatus[jobToken] = (printStatus == CoreWebView2PrintStatus::Succeeded)
+                    ? 6    // Completed
+                    : -1;  // ItemError
+                m_sxActivePrintJobToken.clear();
+                m_activePrintOperation = nullptr;
+            });
+
+        // Respond immediately — client can fire-and-forget or poll status
+        json resp;
+        resp["status"]        = 1; // QueuedToDevice
+        resp["jobIdentifier"] = jobToken;
+        resp["message"]       = "";
+        SendJsonResponse(args, 200, "OK", resp);
+    }
+}
+
+std::string PrintApiRouter::EmulateSXGenerateJobToken()
+{
+    static std::mt19937_64 rng{ std::random_device{}() };
+    static std::uniform_int_distribution<uint64_t> dist;
+    uint64_t a = dist(rng), b = dist(rng);
+    char buf[33];
+    snprintf(buf, sizeof(buf), "%016llx%016llx", a, b);
+    return std::string(buf);
+}
+
+double PrintApiRouter::EmulateSXParseMargin(std::string const& value, int units)
+{
+    double v = 0.0;
+    try { v = std::stod(value); } catch (...) { return 0.0; }
+    // units: 0=default (inches), 1=inches, 2=mm
+    if (units == 2)
+        return v / 25.4;
+    return v;
 }
 
 } // namespace CrumbsBrowser

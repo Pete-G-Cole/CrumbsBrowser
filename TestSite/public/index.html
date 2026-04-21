@@ -31,7 +31,7 @@
 
     <!-- Local API test -->
     <div class="card">
-        <h2>Local API (port 41190)</h2>
+        <h2>Local API (port 41191)</h2>
         <button onclick="testApi()">Ping Local API</button>
         <pre id="api-result">Not tested</pre>
     </div>
@@ -58,7 +58,7 @@
         async function testApi() {
             const el = document.getElementById('api-result');
             try {
-                const res = await fetch('http://localhost:41190/ping');
+                const res = await fetch('http://localhost:41191/ping');
                 const text = await res.text();
                 el.textContent = `HTTP ${res.status}: ${text}`;
                 el.className = 'pass';

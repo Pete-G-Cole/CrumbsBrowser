@@ -20,7 +20,7 @@
 (function (global) {
     'use strict';
 
-    const port    = global.CrumbsBrowserApiPort ?? 41190;
+    const port    = global.CrumbsBrowserApiPort ?? 41191;
     const apiBase = `http://localhost:${port}`;
 
     // -------------------------------------------------------------------------
