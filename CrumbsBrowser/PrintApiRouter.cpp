@@ -443,7 +443,12 @@ json PrintApiRouter::PrinterInfoToJson(PRINTER_INFO_2W const& info, bool include
 {
     json j;
     j["name"]       = utf16_to_utf8(info.pPrinterName ? info.pPrinterName : L"");
-    j["isDefault"]  = (info.Attributes & PRINTER_ATTRIBUTE_DEFAULT) != 0;
+    try
+    {
+        auto defaultName = ResolvePrinterName("");
+        j["isDefault"] = (info.pPrinterName && _wcsicmp(info.pPrinterName, utf8_to_utf16(defaultName).c_str()) == 0);
+    }
+    catch (...) { j["isDefault"] = false; }
     j["status"]     = PrinterStatusToString(info.Status);
     j["portName"]   = utf16_to_utf8(info.pPortName   ? info.pPortName   : L"");
     j["driverName"] = utf16_to_utf8(info.pDriverName ? info.pDriverName : L"");
@@ -1197,7 +1202,7 @@ json PrintApiRouter::EmulateSXDeviceSettingsToJson(std::string const& printerNam
     try
     {
         auto info = HandleGetPrinterByName(resolved);
-        j["isDefault"]   = info.value("isDefault", false);
+        j["isDefault"] = info.value("isDefault", false);
         j["port"]        = info.value("portName", "");
         j["driverName"]  = info.value("driverName", "");
 
